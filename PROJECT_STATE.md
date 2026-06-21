@@ -20,7 +20,7 @@ metrics dashboard) that 1.0 lacked. Ship something **real and runnable**, not va
 |-------|-------|--------|
 | 0.1 File-tree inventory | orchestrator | ✅ `docs/00_FILE_TREE_INVENTORY.md` |
 | 0.2 Feature Catalog | BA agent | ⏳ in progress → `docs/10_FEATURE_CATALOG.md` |
-| 1 Seam report + interface contract | architect | 🔜 (architecture decided in `docs/02`) |
+| 1 Seam report + interface contract | architect | ✅ `docs/04_SEAM_REPORT.md` — redesign safe, zero logic edits |
 | 2 IA / flows | orchestrator+UX | 🔜 |
 | 3 Design system (code) | design agent | ⏳ `app/src/ui/` |
 | 4 Build (screens, billing, telemetry, dashboard) | engineers | ⏳ |
