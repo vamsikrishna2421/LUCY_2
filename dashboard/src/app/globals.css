@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background-color: #0c0b09;
+  color: #f5efe6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Calm, low-noise scrollbars to match the premium dark surface. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #131108;
+}
+::-webkit-scrollbar-thumb {
+  background: #2d2218;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #6f3515;
+}
