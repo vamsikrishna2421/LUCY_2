@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/><title>LUCY 2.0 — Ask</title>
+<style>
+  :root{--bg:#0C0B09;--surface:#161310;--surfaceAlt:#1F1A14;--surfaceElevated:#2A2219;--border:#2D2218;--divider:#1E1710;
+    --textPrimary:#F5EFE6;--textSecondary:#C4A882;--textMuted:#8A7560;--textFaint:#5C4A38;--textOnAccent:#1A0E03;
+    --accent:#FF8C42;--accentGlow:#FFA05C;--accentSoft:#3D1D08;--accentLine:#6F3515;--success:#4ADE80;--info:#60A5FA;--violet:#A78BFA;}
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased}
+  body{background:#000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh}
+  .screen{width:390px;height:844px;background:var(--bg);color:var(--textPrimary);display:flex;flex-direction:column;overflow:hidden;position:relative}
+  .status{height:50px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 22px 6px;position:relative;flex:0 0 auto}
+  .status .time{font-size:15px;font-weight:600}.status .right{display:flex;gap:7px;align-items:center;font-size:13px}
+  .island{position:absolute;top:9px;left:50%;transform:translateX(-50%);width:118px;height:30px;background:#000;border-radius:18px}
+  .bat{width:24px;height:12px;border:1.4px solid var(--textPrimary);border-radius:3px;position:relative}.bat i{position:absolute;inset:1.5px;width:80%;background:var(--textPrimary);border-radius:1px;display:block}.bat:after{content:'';position:absolute;right:-3px;top:3px;width:2px;height:6px;background:var(--textPrimary);border-radius:1px}
+  .hdr{padding:4px 20px 10px;display:flex;align-items:center;gap:12px;flex:0 0 auto}
+  .orb{width:40px;height:40px;border-radius:50%;position:relative;background:radial-gradient(circle at 36% 30%,#FFB877,#FF8C42 52%,#B8551B);box-shadow:0 0 16px rgba(255,140,66,.45)}
+  .orb .e{position:absolute;top:16px;width:4px;height:6px;border-radius:2px;background:#2A1205}.orb .e.l{left:12px}.orb .e.r{right:12px}
+  .orb .s{position:absolute;top:24px;left:50%;transform:translateX(-50%);width:12px;height:6px;border:2px solid #2A1205;border-top:0;border-radius:0 0 12px 12px}
+  .h1{font-size:24px;font-weight:700;letter-spacing:-.4px}.sub{font-size:12px;color:var(--textMuted)}
+  .scroll{flex:1;overflow:hidden;padding:6px 16px}
+  .row{display:flex}
+  .uwrap{justify-content:flex-end;margin:8px 0}
+  .ubub{background:var(--accentSoft);border:1px solid var(--accentLine);color:var(--textPrimary);border-radius:16px 16px 4px 16px;padding:10px 14px;font-size:15px;max-width:80%}
+  .lwrap{gap:8px;margin:8px 0;align-items:flex-end}
+  .lorb{width:26px;height:26px;border-radius:50%;background:radial-gradient(circle at 36% 30%,#FFB877,#FF8C42 60%,#B8551B);flex:0 0 26px;box-shadow:0 0 10px rgba(255,140,66,.4)}
+  .lbub{background:var(--surface);border:1px solid var(--border);border-radius:16px 16px 16px 4px;padding:12px 14px;max-width:85%}
+  .ltext{font-size:15px;line-height:21px}
+  .src{margin-top:10px;background:var(--surfaceAlt);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:10px;padding:9px 11px}
+  .src .cap{font-size:9.5px;font-weight:700;letter-spacing:1px;color:var(--accent)}
+  .src .q{font-size:12.5px;color:var(--textSecondary);margin-top:3px;line-height:17px}
+  .src .m{font-size:10.5px;color:var(--textFaint);margin-top:4px}
+  .act{margin-top:10px;display:flex;align-items:center;gap:10px;background:#3D1D0855;border:1px solid var(--accentLine);border-radius:11px;padding:9px 11px}
+  .act .t{font-size:13px;font-weight:600;flex:1}.act .cap{font-size:9.5px;font-weight:700;letter-spacing:1px;color:var(--accent)}
+  .act .go{background:var(--accent);color:var(--textOnAccent);font-size:12px;font-weight:700;padding:6px 12px;border-radius:9px}
+  .qq{display:flex;gap:8px;overflow:hidden;padding:6px 0 2px;flex-wrap:wrap}
+  .qchip{font-size:13px;font-weight:600;padding:8px 13px;border-radius:999px;border:1px solid var(--border);color:var(--textSecondary);background:var(--surfaceAlt);white-space:nowrap}
+  .dock{flex:0 0 auto;border-top:1px solid var(--divider);background:var(--bg);padding:10px 16px}
+  .dockrow{display:grid;grid-template-columns:1fr 46px 46px;gap:8px;align-items:center}
+  .field{background:var(--surfaceAlt);border:1px solid var(--border);border-radius:14px;min-height:46px;display:flex;align-items:center;padding:0 16px;color:var(--textFaint);font-size:16px;min-width:0}
+  .ib{width:46px;height:46px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:20px}
+  .ib.sec{background:var(--surfaceAlt);border:1px solid var(--border);color:var(--textSecondary)}
+  .ib.pri{background:var(--accent);color:var(--textOnAccent)}
+  .homebar{position:absolute;bottom:7px;left:50%;transform:translateX(-50%);width:134px;height:5px;border-radius:3px;background:var(--textFaint);opacity:.7}
+</style></head>
+<body>
+<div class="screen">
+  <div class="status"><div class="island"></div><div class="time">9:41</div><div class="right"><span>●●●</span><span>Wi‑Fi</span><span class="bat"><i></i></span></div></div>
+  <div class="hdr">
+    <div class="orb"><span class="e l"></span><span class="e r"></span><span class="s"></span></div>
+    <div><div class="h1">Ask LUCY</div><div class="sub">Everything you've ever told me — instantly.</div></div>
+  </div>
+
+  <div class="scroll">
+    <div class="row uwrap"><div class="ubub">What did I promise Raghavendra?</div></div>
+
+    <div class="row lwrap">
+      <div class="lorb"></div>
+      <div class="lbub">
+        <div class="ltext">You promised to <b>send him the Q3 deck by Thursday</b>. You mentioned pulling the latest numbers from finance first.</div>
+        <div class="src">
+          <div class="cap">FROM YOUR MEMORY · TUE 9:12 AM</div>
+          <div class="q">"Send the deck to Raghavendra by Thursday — pull the latest numbers from finance first."</div>
+          <div class="m">🎙 Voice capture · Work</div>
+        </div>
+        <div class="act"><div><div class="cap">LUCY CAN DO THIS</div><div class="t">Remind me Wed 4 PM</div></div><div class="go">Apply</div></div>
+      </div>
+    </div>
+
+    <div class="row uwrap"><div class="ubub">How much did I spend on coffee this month?</div></div>
+    <div class="row lwrap">
+      <div class="lorb"></div>
+      <div class="lbub">
+        <div class="ltext"><b>₹2,140</b> across 9 visits — about ₹238 each. That's up ~18% from last month.</div>
+        <div class="src"><div class="cap">SPENDING · JUNE</div><div class="q">9 expenses tagged “coffee” · Blue Bottle, Third Wave, Starbucks</div></div>
+      </div>
+    </div>
+
+    <div class="qq">
+      <span class="qchip">What's due this week?</span>
+      <span class="qchip">Who haven't I talked to lately?</span>
+      <span class="qchip">Summarize my day</span>
+    </div>
+  </div>
+
+  <div class="dock">
+    <div class="dockrow">
+      <div class="field">Ask anything…</div>
+      <div class="ib sec">🎙</div>
+      <div class="ib pri">↑</div>
+    </div>
+  </div>
+  <div class="homebar"></div>
+</div>
+</body></html>

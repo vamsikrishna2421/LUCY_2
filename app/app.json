@@ -10,13 +10,15 @@
     "runtimeVersion": "6",
     "updates": {
       "url": "https://u.expo.dev/1a602e40-067f-4786-a9a6-26c6cc15bda6",
-      "requestHeaders": { "expo-channel-name": "production" },
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      },
       "fallbackToCacheTimeout": 0
     },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.lucy",
-      "buildNumber": "2.0.0",
+      "buildNumber": "2.0.1",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.com.anonymous.lucy"
@@ -26,7 +28,9 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSSupportsLiveActivities": true,
-        "UIBackgroundModes": ["audio"],
+        "UIBackgroundModes": [
+          "audio"
+        ],
         "LSApplicationQueriesSchemes": [
           "tel",
           "sms",
@@ -68,9 +72,14 @@
           {
             "UTTypeIdentifier": "net.daringfireball.markdown",
             "UTTypeDescription": "Markdown",
-            "UTTypeConformsTo": ["public.plain-text"],
+            "UTTypeConformsTo": [
+              "public.plain-text"
+            ],
             "UTTypeTagSpecification": {
-              "public.filename-extension": ["md", "markdown"],
+              "public.filename-extension": [
+                "md",
+                "markdown"
+              ],
               "public.mime-type": "text/markdown"
             }
           }
@@ -90,27 +99,47 @@
         {
           "action": "SEND",
           "data": [
-            {"mimeType": "text/plain"},
-            {"mimeType": "text/markdown"},
-            {"mimeType": "text/*"}
+            {
+              "mimeType": "text/plain"
+            },
+            {
+              "mimeType": "text/markdown"
+            },
+            {
+              "mimeType": "text/*"
+            }
           ],
-          "category": ["DEFAULT"]
+          "category": [
+            "DEFAULT"
+          ]
         },
         {
           "action": "SEND",
           "data": [
-            {"mimeType": "image/*"},
-            {"mimeType": "application/pdf"}
+            {
+              "mimeType": "image/*"
+            },
+            {
+              "mimeType": "application/pdf"
+            }
           ],
-          "category": ["DEFAULT"]
+          "category": [
+            "DEFAULT"
+          ]
         },
         {
           "action": "SEND_MULTIPLE",
           "data": [
-            {"mimeType": "image/*"},
-            {"mimeType": "application/pdf"}
+            {
+              "mimeType": "image/*"
+            },
+            {
+              "mimeType": "application/pdf"
+            }
           ],
-          "category": ["DEFAULT"]
+          "category": [
+            "DEFAULT"
+          ]
         }
       ],
       "permissions": [
@@ -201,7 +230,13 @@
           "speechRecognitionPermission": "LUCY uses speech recognition to turn your voice into private on-device text."
         }
       ],
-      ["expo-audio", { "microphonePermission": "LUCY uses the microphone to record your thoughts in Listen mode and during meetings.", "enableBackgroundRecording": true }],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "LUCY uses the microphone to record your thoughts in Listen mode and during meetings.",
+          "enableBackgroundRecording": true
+        }
+      ],
       "expo-localization",
       "expo-asset",
       [
@@ -226,7 +261,9 @@
             "enableShrinkResourcesInReleaseBuilds": true,
             "extraProguardRules": "-keep class org.pytorch.** { *; }\n-keep class com.swmansion.rnexecutorch.** { *; }\n-keep class com.facebook.jni.** { *; }\n-dontwarn org.pytorch.**",
             "useLegacyPackaging": true,
-            "abiFilters": ["arm64-v8a"],
+            "abiFilters": [
+              "arm64-v8a"
+            ],
             "manifestQueries": {
               "package": [
                 "com.spotify.music",
@@ -235,14 +272,51 @@
                 "com.google.android.deskclock"
               ],
               "intent": [
-                { "action": "android.intent.action.VIEW", "data": { "scheme": "tel" } },
-                { "action": "android.intent.action.DIAL", "data": { "scheme": "tel" } },
-                { "action": "android.intent.action.VIEW", "data": { "scheme": "sms" } },
-                { "action": "android.intent.action.SENDTO", "data": { "scheme": "smsto" } },
-                { "action": "android.intent.action.VIEW", "data": { "scheme": "geo" } },
-                { "action": "android.intent.action.VIEW", "data": { "scheme": "mailto" } },
-                { "action": "android.intent.action.SET_TIMER" },
-                { "action": "android.intent.action.INSERT", "data": { "mimeType": "vnd.android.cursor.item/event" } }
+                {
+                  "action": "android.intent.action.VIEW",
+                  "data": {
+                    "scheme": "tel"
+                  }
+                },
+                {
+                  "action": "android.intent.action.DIAL",
+                  "data": {
+                    "scheme": "tel"
+                  }
+                },
+                {
+                  "action": "android.intent.action.VIEW",
+                  "data": {
+                    "scheme": "sms"
+                  }
+                },
+                {
+                  "action": "android.intent.action.SENDTO",
+                  "data": {
+                    "scheme": "smsto"
+                  }
+                },
+                {
+                  "action": "android.intent.action.VIEW",
+                  "data": {
+                    "scheme": "geo"
+                  }
+                },
+                {
+                  "action": "android.intent.action.VIEW",
+                  "data": {
+                    "scheme": "mailto"
+                  }
+                },
+                {
+                  "action": "android.intent.action.SET_TIMER"
+                },
+                {
+                  "action": "android.intent.action.INSERT",
+                  "data": {
+                    "mimeType": "vnd.android.cursor.item/event"
+                  }
+                }
               ]
             }
           },

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/><title>LUCY 2.0 — Paywall</title>
+<style>
+  :root{--bg:#0C0B09;--surface:#161310;--surfaceAlt:#1F1A14;--surfaceElevated:#2A2219;--border:#2D2218;--divider:#1E1710;
+    --textPrimary:#F5EFE6;--textSecondary:#C4A882;--textMuted:#8A7560;--textFaint:#5C4A38;--textOnAccent:#1A0E03;
+    --accent:#FF8C42;--accentGlow:#FFA05C;--accentSoft:#3D1D08;--accentLine:#6F3515;--success:#4ADE80;}
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased}
+  body{background:#000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh}
+  .screen{width:390px;height:844px;background:var(--bg);color:var(--textPrimary);display:flex;flex-direction:column;overflow:hidden;position:relative}
+  .status{height:50px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 22px 6px;position:relative;flex:0 0 auto}
+  .status .time{font-size:15px;font-weight:600}.status .right{display:flex;gap:7px;align-items:center;font-size:13px}
+  .island{position:absolute;top:9px;left:50%;transform:translateX(-50%);width:118px;height:30px;background:#000;border-radius:18px}
+  .bat{width:24px;height:12px;border:1.4px solid var(--textPrimary);border-radius:3px;position:relative}.bat i{position:absolute;inset:1.5px;width:80%;background:var(--textPrimary);border-radius:1px;display:block}.bat:after{content:'';position:absolute;right:-3px;top:3px;width:2px;height:6px;background:var(--textPrimary);border-radius:1px}
+  .close{position:absolute;top:54px;right:20px;color:var(--textMuted);font-size:22px;z-index:2}
+  .scroll{flex:1;overflow:hidden;padding:8px 20px 0;text-align:center}
+  .orb{width:64px;height:64px;border-radius:50%;position:relative;margin:6px auto 14px;background:radial-gradient(circle at 36% 30%,#FFB877,#FF8C42 52%,#B8551B);box-shadow:0 0 26px rgba(255,140,66,.55)}
+  .orb .e{position:absolute;top:26px;width:6px;height:8px;border-radius:3px;background:#2A1205}.orb .e.l{left:20px}.orb .e.r{right:20px}
+  .orb .s{position:absolute;top:38px;left:50%;transform:translateX(-50%);width:18px;height:9px;border:2px solid #2A1205;border-top:0;border-radius:0 0 18px 18px}
+  .h1{font-size:26px;font-weight:700;letter-spacing:-.4px}
+  .tag{font-size:14px;color:var(--textSecondary);margin-top:6px;line-height:20px}
+  .feat{text-align:left;margin:16px 4px 4px}
+  .frow{display:flex;align-items:center;gap:11px;padding:7px 0}
+  .ck{width:22px;height:22px;border-radius:999px;background:#FF8C4222;color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:13px;flex:0 0 22px}
+  .ft{font-size:14.5px}
+  .plans{display:flex;gap:10px;margin-top:18px}
+  .plan{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px 8px;position:relative}
+  .plan.best{border-color:var(--accent);background:#3D1D0833}
+  .ribbon{position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:var(--accent);color:var(--textOnAccent);font-size:9px;font-weight:800;letter-spacing:.5px;padding:3px 9px;border-radius:999px;white-space:nowrap}
+  .pname{font-size:12px;font-weight:700;color:var(--textSecondary)}
+  .pprice{font-size:20px;font-weight:800;margin-top:6px}
+  .pper{font-size:10.5px;color:var(--textMuted);margin-top:2px}
+  .psave{font-size:10px;color:var(--success);font-weight:700;margin-top:4px}
+  .cta{margin:18px 0 8px;background:var(--accent);color:var(--textOnAccent);border-radius:16px;padding:16px;font-size:16px;font-weight:800}
+  .ctasub{font-size:12px;color:var(--textMuted)}
+  .foot{display:flex;justify-content:center;gap:16px;margin-top:14px;padding-bottom:6px}
+  .foot a{font-size:12px;color:var(--textMuted);text-decoration:none}
+  .homebar{position:absolute;bottom:7px;left:50%;transform:translateX(-50%);width:134px;height:5px;border-radius:3px;background:var(--textFaint);opacity:.7}
+</style></head>
+<body>
+<div class="screen">
+  <div class="status"><div class="island"></div><div class="time">9:41</div><div class="right"><span>●●●</span><span>Wi‑Fi</span><span class="bat"><i></i></span></div></div>
+  <div class="close">✕</div>
+  <div class="scroll">
+    <div class="orb"><span class="e l"></span><span class="e r"></span><span class="s"></span></div>
+    <div class="h1">LUCY Pro</div>
+    <div class="tag">Your whole life, remembered — with the smartest models and every autopilot working for you.</div>
+
+    <div class="feat">
+      <div class="frow"><span class="ck">✓</span><span class="ft">Unlimited captures &amp; recall</span></div>
+      <div class="frow"><span class="ck">✓</span><span class="ft">Premium cloud models (Claude &amp; GPT)</span></div>
+      <div class="frow"><span class="ck">✓</span><span class="ft">All autopilots — trips, moves, money goals</span></div>
+      <div class="frow"><span class="ck">✓</span><span class="ft">Advanced Health &amp; Money insights</span></div>
+      <div class="frow"><span class="ck">✓</span><span class="ft">Meeting mode &amp; the LAN companion</span></div>
+    </div>
+
+    <div class="plans">
+      <div class="plan"><div class="pname">MONTHLY</div><div class="pprice">$9.99</div><div class="pper">per month</div></div>
+      <div class="plan best"><div class="ribbon">BEST VALUE</div><div class="pname">ANNUAL</div><div class="pprice">$79.99</div><div class="pper">$6.67 / mo</div><div class="psave">Save 33%</div></div>
+      <div class="plan"><div class="pname">LIFETIME</div><div class="pprice">$199</div><div class="pper">one time</div></div>
+    </div>
+
+    <div class="cta">Start 7‑day free trial</div>
+    <div class="ctasub">Then $79.99/yr · cancel anytime</div>
+
+    <div class="foot"><a>Restore</a><a>Terms</a><a>Privacy</a></div>
+  </div>
+  <div class="homebar"></div>
+</div>
+</body></html>

@@ -10,6 +10,8 @@ HTML files in `preview/screens/` in any browser for the live version.
 | `png/home-android.png` | Home / Timeline at Android size. |
 | `png/capture-ios.png` | The redesigned **Capture** (core-loop) screen, iPhone size (390×844). |
 | `png/capture-android.png` | Same screen at Android size (412×915). |
+| `png/ask-ios.png` | **Ask / Recall** — conversational recall with cited memory sources + "LUCY can do this" action chips + quick questions. |
+| `png/paywall-ios.png` | **LUCY Pro paywall** (monetization) — feature list, Monthly/Annual(best value)/Lifetime, 7-day trial. |
 | `png/design-system.png` | The **design system** — colors, type scale, buttons, cards, badges, chips, segmented control, input/skeleton/toast, the LUCY orb. |
 | `screens/capture.html` | Source of the Capture preview (open in a browser for the live render). |
 | `screens/components.html` | Source of the design-system showcase. |
