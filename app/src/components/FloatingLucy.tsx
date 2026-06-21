@@ -35,9 +35,9 @@ export function FloatingLucy({
   const win = Dimensions.get('window');
   const sizeRef = useRef(FALLBACK);
 
-  // Default: mid-height on the right edge — clearly visible, clear of the header, bottom nav, and the
+  // Default: lower-right — out of the top reading zone, and clear of the header, bottom nav, and the
   // dashboard camera FAB. The user can drag it anywhere; position is then remembered.
-  const startPos = { x: win.width - FALLBACK - MARGIN, y: Math.round(win.height * 0.42) };
+  const startPos = { x: win.width - FALLBACK - MARGIN, y: Math.round(win.height * 0.62) };
   const pan = useRef(new Animated.ValueXY(startPos)).current;
   const posRef = useRef(startPos);
   const draggingRef = useRef(false);
