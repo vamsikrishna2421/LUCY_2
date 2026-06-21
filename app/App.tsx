@@ -1119,7 +1119,16 @@ export default function App() {
             <View style={styles.updateIconRing}><Ionicons name="sparkles" size={26} color={LUCY_COLORS.primary} /></View>
             <Text style={styles.updateTitle}>A fresh update is ready</Text>
             <Text style={styles.updateBody}>LUCY just downloaded the latest improvements. Restart to apply them.</Text>
-            <TouchableOpacity style={styles.updatePrimary} activeOpacity={0.9} onPress={() => { void import('expo-updates').then((U) => U.reloadAsync()).catch(() => {}); }}>
+            <TouchableOpacity style={styles.updatePrimary} activeOpacity={0.9} onPress={() => {
+              // Dismiss this Modal FIRST, then reload after it animates away. Calling reloadAsync while a
+              // Modal is still presented made iOS tear the app down WITHOUT relaunching ("it just closed").
+              setUpdateReady(false);
+              setTimeout(() => {
+                void import('expo-updates')
+                  .then((U) => U.reloadAsync())
+                  .catch(() => Alert.alert('Almost there', 'Please fully close LUCY and reopen it to finish updating.'));
+              }, 350);
+            }}>
               <Text style={styles.updatePrimaryText}>Restart now</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.updateLater} onPress={() => setUpdateReady(false)}>

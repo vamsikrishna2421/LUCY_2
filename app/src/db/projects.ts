@@ -102,7 +102,7 @@ export async function assignTodoToProject(db: SQLiteDatabase, todoId: number, pr
   await db.runAsync('UPDATE todos SET project_id = ? WHERE id = ?', projectId, todoId);
 }
 
-export interface ProjectNote { id: number; title: string | null; snippet: string; created_at: string; }
+export interface ProjectNote { id: number; title: string | null; snippet: string; body: string; created_at: string; }
 
 /** The actual captures/notes that mention this project (by name or any merged alias) — so the project
  *  space can SHOW them, not just count tasks. Newest first. */
@@ -125,6 +125,7 @@ export async function projectNotes(db: SQLiteDatabase, name: string, limit = 50)
     id: r.id,
     title: r.extracted_title,
     snippet: (r.structured_text || r.raw_transcript || '').replace(/\s+/g, ' ').trim().slice(0, 140),
+    body: (r.structured_text || r.raw_transcript || '').replace(/\s+/g, ' ').trim(),
     created_at: r.created_at,
   }));
 }

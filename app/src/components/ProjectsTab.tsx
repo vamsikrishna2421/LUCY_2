@@ -24,6 +24,7 @@ export function ProjectsTab() {
   const [eDesc, setEDesc] = useState('');
   const [activity, setActivity] = useState<{ tasks: number; blocks: number } | null>(null);
   const [notes, setNotes] = useState<ProjectNote[]>([]);
+  const [openNote, setOpenNote] = useState<ProjectNote | null>(null);
   const [suggestions, setSuggestions] = useState<ProjectSuggestion[]>([]);
   const [mergeFor, setMergeFor] = useState<ProjectSuggestion | null>(null);
   const [moveSignal, setMoveSignal] = useState<StoredMoveSignal | null>(null);
@@ -98,7 +99,7 @@ export function ProjectsTab() {
   useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
-    if (!open) { setActivity(null); setNotes([]); setEditMode(false); return; }
+    if (!open) { setActivity(null); setNotes([]); setEditMode(false); setOpenNote(null); return; }
     let live = true;
     (async () => {
       const db = await getDatabase();
@@ -261,6 +262,24 @@ export function ProjectsTab() {
       {/* Project space — inline edit + related notes, all in ONE modal (iOS can't stack two modals) */}
       <Modal visible={!!open} transparent animationType="slide" onRequestClose={() => { setOpen(null); setEditMode(false); }}>
         <KeyboardAvoidingView style={styles.modalBg} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><View style={styles.sheet}>
+          {openNote ? (
+            /* Note detail — full content of a tapped related note, with a Done dismiss. Shown inline
+               because iOS can't stack a second modal over the project space. */
+            <>
+              <View style={styles.head}>
+                <Text style={[styles.h, { flex: 1, marginRight: 10 }]} numberOfLines={2}>{openNote.title || 'Note'}</Text>
+                <TouchableOpacity onPress={() => setOpenNote(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}><Text style={styles.x}>✕</Text></TouchableOpacity>
+              </View>
+              <Text style={styles.noteWhen}>{new Date(openNote.created_at).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</Text>
+              <ScrollView style={{ maxHeight: 380, marginTop: 12 }} contentContainerStyle={{ paddingBottom: 6 }} showsVerticalScrollIndicator>
+                <Text style={styles.noteDetailBody}>{openNote.body || openNote.snippet || 'No content captured for this note.'}</Text>
+              </ScrollView>
+              <View style={styles.rowEnd}>
+                <TouchableOpacity style={styles.btn} onPress={() => setOpenNote(null)}><Text style={styles.btnT}>Done</Text></TouchableOpacity>
+              </View>
+            </>
+          ) : (
+            <>
           <View style={styles.head}>
             <Text style={[styles.h, { flex: 1, marginRight: 10 }]} numberOfLines={2}>{open?.name}</Text>
             <TouchableOpacity onPress={() => { setOpen(null); setEditMode(false); }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}><Text style={styles.x}>✕</Text></TouchableOpacity>
@@ -280,11 +299,11 @@ export function ProjectsTab() {
               ) : (
                 <ScrollView style={{ maxHeight: 300 }} contentContainerStyle={{ paddingBottom: 4 }} showsVerticalScrollIndicator={false}>
                   {notes.map((n) => (
-                    <View key={n.id} style={styles.noteRow}>
+                    <TouchableOpacity key={n.id} style={styles.noteRow} activeOpacity={0.85} onPress={() => setOpenNote(n)}>
                       <Text style={styles.noteTitle} numberOfLines={1}>{n.title || n.snippet || 'Untitled note'}</Text>
                       {n.snippet ? <Text style={styles.noteSnippet} numberOfLines={2}>{n.snippet}</Text> : null}
                       <Text style={styles.noteWhen}>{new Date(n.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</Text>
-                    </View>
+                    </TouchableOpacity>
                   ))}
                 </ScrollView>
               )}
@@ -310,6 +329,8 @@ export function ProjectsTab() {
                 <TouchableOpacity style={styles.btnGhost} onPress={() => setEditMode(false)}><Text style={styles.btnGhostT}>Cancel</Text></TouchableOpacity>
                 <TouchableOpacity style={[styles.btn, !eName.trim() && styles.btnDisabled]} disabled={!eName.trim()} onPress={saveEdit}><Text style={styles.btnT}>Save</Text></TouchableOpacity>
               </View>
+            </>
+          )}
             </>
           )}
         </View></KeyboardAvoidingView>
@@ -383,6 +404,7 @@ const styles = StyleSheet.create({
   noteTitle: { color: LUCY_COLORS.textDark, fontWeight: '700', fontSize: 14 },
   noteSnippet: { color: LUCY_COLORS.textMuted, fontSize: 12, marginTop: 3, lineHeight: 17 },
   noteWhen: { color: LUCY_COLORS.textFaint, fontSize: 11, marginTop: 6 },
+  noteDetailBody: { color: LUCY_COLORS.textDark, fontSize: 14.5, lineHeight: 21 },
   // Move/lease autopilot offer banner
   moveBox: { backgroundColor: 'rgba(255,140,66,0.10)', borderWidth: 1, borderColor: LUCY_COLORS.primaryLine, borderRadius: 16, padding: 14, marginBottom: 14 },
   moveHead: { color: LUCY_COLORS.primaryGlow, fontWeight: '900', fontSize: 11, letterSpacing: 0.5, marginBottom: 6 },

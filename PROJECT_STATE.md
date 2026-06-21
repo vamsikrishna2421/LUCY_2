@@ -38,6 +38,12 @@ metrics dashboard) that 1.0 lacked. Ship something **real and runnable**, not va
 - `app/` deps installed (npm, exit 0). `.env.local` (1.0 keys) present & git-ignored.
 - Git: local repo → remote `origin = github.com/vamsikrishna2421/LUCY_2` (was empty).
 
+## Backlog (owner-prioritised)
+- **[LOW] Telugu (and other Indian-language) speech understanding.** iOS speech has no on-device/cloud
+  model for te-IN etc., so voice currently resolves to English (en-IN) and only understands/answers in
+  English even when the user selects Telugu only. Owner OK with this for now (2026-06-21). Long-term: a
+  non-Apple STT path (e.g. a cloud STT that supports Telugu) for the conversation/Listen flows.
+
 ## Risks / watch
 - Coherence of parallel agent output → mitigated by token contract + file ownership + central integration.
 - Native-dep installs (RevenueCat/Sentry) may need a dev build (not Expo Go) → note in NEEDS_FROM_YOU.
@@ -79,3 +85,42 @@ metrics dashboard) that 1.0 lacked. Ship something **real and runnable**, not va
 - 2026-06-21 (cont.): Owner's 2 real-bug fixes APPLIED (Free Up Space: embedded confirm/Toast + batched
   hardDeleteCaptures fixes the dead delete; +Select-all chip) — frozen db/captures.ts touched as sanctioned
   real-bug exception. typecheck 0. Android build (android-release apk) triggered.
+- 2026-06-21 (cont.): Android build 2.0 SUCCEEDED (versionCode 106, runtime 6) — install:
+  https://expo.dev/accounts/lekkala2421/projects/lucy/builds/e9aed064-ce8d-477e-aa39-95dfc136a357
+- 2026-06-21 (cont.): DEVICE-FEEDBACK FIXES (owner's 5 screenshots) — all JS-level, shipped via OTA:
+  (1) Settings rows had NO titles — root cause `PressableScale` put the caller `style` (flex:1) on the inner
+      Animated.View instead of the Pressable, so the flex:1 title box collapsed to 0 width (only badge + i
+      showed). Fix: style → Pressable. Repairs every row built on PressableScale, app-wide.
+  (2) Wasted space — App shell `styles.container` added paddingHorizontal:16 on TOP of each screen's own
+      gutter (32-36px double-gutter); set it to 0 (screens own their gutter). Removed Dashboard's redundant
+      `insets.top` (~47px gap already covered by SafeAreaView + header).
+  (3) Duplicate orb on Tasks — LUCY's face is now a single global DRAGGABLE `FloatingLucy` overlay (zero
+      fixed layout space, edge-snaps, position persisted, tap-to-talk, defaults lower-right clear of FAB/nav);
+      removed Capture's hero `LucyOrb`. Implements the owner's "movable floating face" request too.
+  tsc 0, 16/16 render. Commits 49f6fd5 + 548cd59 pushed. OTA → production (groups e98836d3, then c835bb4a).
+  Owner action: relaunch iOS app to pull the OTA (it shows "fresh update ready" → restart); install the
+  Android APK from the link above to test Android.
+- 2026-06-21 (cont.): ROUND 2 device feedback (IMG_0968 + IMG_0971), all JS-level, OTA group b50dc866:
+  (1) Tasks: hid the bottom "Manage todo list" composer (SHOW_COMPOSER flag in Capture.tsx, easily flipped
+      back) — owner felt it made the board look odd.
+  (2) Tasks: fixed the 5-10s freeze on a task's three-dots — onEdit dismissed the category sheet Modal and
+      presented the edit Modal in the same tick (iOS hangs presenting a Modal while another dismisses).
+      Now sequenced (~320ms) so one Modal transitions at a time.
+  (3) Health: split into "Food" (intake: energy ring, meal logging, today's meals) and "Activity" (output +
+      wellbeing: steps/sleep/HR/energy, trends, mood, Dr. Lucy) tabs via SegmentedControl, like Ask Lucy.
+  (4) Voice (root cause): speech recognizer used the profile's first non-English language (Telugu te-IN),
+      unsupported by iOS speech → "Hey Lucy" stuck "Starting…"/unavailable, conversation + Listen errored
+      (language-not-supported), mishearings. Added resolveSupportedSpeechLocale + resolveWakeWordLocale
+      (audio/transcriptionLanguage.ts) that pick a device-SUPPORTED locale: wake word → regional English
+      (en-IN); dictation/conversation/Listen → user's language if supported else English. Wake word also
+      self-heals to en-US on a language-not-supported error. Wired into wakeWord/conversation/PassiveListener.
+  Confirmed from IMG_0971: the PressableScale fix landed — Settings rows now show their titles. Commit 264386e.
+- 2026-06-21 (cont.): ROUND 3 (IMG_0972/0973) — voice conversation runaway loop, OTA group 1bd04d85, commit 6f05700:
+  (1) Echo loop (LUCY heard her own TTS, answered herself, transcribed garbage, never stopped): conversation
+      recognizer used iosCategory mode 'measurement' which DISABLES acoustic echo cancellation. Switched to
+      mode 'voiceChat' (voice-processing I/O: echo cancellation + noise suppression).
+  (2) Never-stops: added an 11s silence timeout (re-armed on speech) that calmly ends the conversation when
+      the user goes quiet.
+  (3) audio-capture / kAFAssistantErrorDomain 209 (was a fatal error card): now retried ≤2× (transient blip
+      as TTS releases the session) then ends calmly; +300ms playback→record settle before reopening the mic.
+  conversation.ts only; tsc 0, 16/16 render.
