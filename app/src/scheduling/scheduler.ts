@@ -33,6 +33,7 @@ export interface FindSlotsInput {
   horizonDays?: number;
   maxResults?: number;
   earliestStart?: number; // don't suggest before this (defaults to now + 10min lead)
+  preferWindowMin?: { start: number; end: number }; // optional time-of-day bias (minutes from midnight)
 }
 
 /** Find conflict-free, personalization-ranked slots for a task. */
@@ -80,6 +81,8 @@ export function findSlots(input: FindSlotsInput): SlotSuggestion[] {
     if (meta.domain === 'office' && isWorkday) { winStart = av.workStartMin; winEnd = av.workEndMin; } // keep work in work hours
     if (meta.earliestMin != null) winStart = Math.max(winStart, meta.earliestMin);
     if (meta.latestMin != null) winEnd = Math.min(winEnd, meta.latestMin + Math.max(5, meta.durationMin));
+    // Optional time-of-day preference ("in the morning") narrows the day's window.
+    if (input.preferWindowMin) { winStart = Math.max(winStart, input.preferWindowMin.start); winEnd = Math.min(winEnd, input.preferWindowMin.end); }
 
     const lm = localMinutes(s);
     const lmEnd = localMinutes(e - 1);

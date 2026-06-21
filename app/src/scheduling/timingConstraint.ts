@@ -1,12 +1,16 @@
 /**
  * Parse a natural-language timing comment on a scheduling suggestion ("not tomorrow", "last week of
- * this month", "next week", "after the 25th") into a date WINDOW the scheduler can honor. Pure +
- * unit-tested. Returns an earliestStart (ms) + horizonDays so findSlots searches inside that window.
+ * this month", "next week", "after the 25th", "in the morning", "tomorrow afternoon") into a date
+ * WINDOW (+ optional time-of-day window) the scheduler can honor. Pure + unit-tested. Returns an
+ * earliestStart (ms) + horizonDays so findSlots searches inside that window, plus optional
+ * windowMinStart/windowMinEnd (minutes from midnight) to bias toward a part of the day.
  */
 export interface TimingConstraint {
   earliestStart: number;   // ms epoch — don't suggest before this
   horizonDays: number;     // how many days from today to search through (covers the window end)
   label: string;           // human label echoed back ("last week of June")
+  windowMinStart?: number; // time-of-day floor in minutes (e.g. morning = 360 = 06:00)
+  windowMinEnd?: number;   // time-of-day ceiling in minutes (e.g. morning = 720 = 12:00)
 }
 
 const DAY = 86_400_000;
@@ -15,8 +19,24 @@ const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 
 function startOfDay(d: Date): number { const x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime(); }
 function daysFromToday(ms: number, now: number): number { return Math.max(1, Math.ceil((ms - startOfDay(new Date(now))) / DAY)); }
 
-export function parseTimingConstraint(text: string, now = Date.now()): TimingConstraint | null {
-  const q = (text || '').toLowerCase();
+// Parts of the day → [start, end) in minutes from midnight.
+const TOD: Record<string, { start: number; end: number; label: string }> = {
+  morning: { start: 6 * 60, end: 12 * 60, label: 'in the morning' },
+  afternoon: { start: 12 * 60, end: 17 * 60, label: 'in the afternoon' },
+  evening: { start: 17 * 60, end: 21 * 60, label: 'in the evening' },
+  night: { start: 19 * 60, end: 22 * 60, label: 'at night' },
+};
+
+function parseTimeOfDay(q: string): { start: number; end: number; label: string } | null {
+  if (/\bmornings?\b/.test(q)) return TOD.morning;
+  if (/\b(afternoons?|midday|mid-day|noon)\b/.test(q)) return TOD.afternoon;
+  if (/\bevenings?\b/.test(q)) return TOD.evening;
+  if (/\b(nights?|tonight)\b/.test(q)) return TOD.night;
+  return null;
+}
+
+/** Parse only the DATE-window part (the original behaviour). */
+function parseDateConstraint(q: string, now: number): TimingConstraint | null {
   const today = new Date(now);
   const y = today.getFullYear();
   const m = today.getMonth();
@@ -51,6 +71,17 @@ export function parseTimingConstraint(text: string, now = Date.now()): TimingCon
     return { earliestStart: Math.max(start, now), horizonDays: daysFromToday(start + 1 * DAY, now), label: 'this weekend' };
   }
 
+  // "tomorrow" → start tomorrow (a 1-day nudge), unless it's the negated "not tomorrow" (handled below).
+  if (/\btomorrow\b/.test(q) && !/\bnot tomorrow\b/.test(q)) {
+    const start = startOfDay(today) + 1 * DAY;
+    return { earliestStart: start, horizonDays: daysFromToday(start + 1 * DAY, now), label: 'tomorrow' };
+  }
+
+  // "today" → keep today's window.
+  if (/\btoday\b/.test(q)) {
+    return { earliestStart: now + 10 * 60_000, horizonDays: 1, label: 'today' };
+  }
+
   // "after the 25th" / "on the 25th" / "the 25th" → that calendar day (this month, or next if passed).
   const dm = q.match(/\b(?:after |on |by )?the (\d{1,2})(?:st|nd|rd|th)?\b/);
   if (dm) {
@@ -75,6 +106,24 @@ export function parseTimingConstraint(text: string, now = Date.now()): TimingCon
     return { earliestStart: start, horizonDays: daysFromToday(start + 5 * DAY, now), label: 'later this week' };
   }
 
+  return null;
+}
+
+export function parseTimingConstraint(text: string, now = Date.now()): TimingConstraint | null {
+  const q = (text || '').toLowerCase();
+  const tod = parseTimeOfDay(q);
+  const date = parseDateConstraint(q, now);
+
+  if (date) {
+    // Date (+ optional time-of-day): combine the window and the label.
+    return tod
+      ? { ...date, windowMinStart: tod.start, windowMinEnd: tod.end, label: `${date.label}, ${tod.label}` }
+      : date;
+  }
+  if (tod) {
+    // Time-of-day only — keep the default forward window, just bias toward that part of the day.
+    return { earliestStart: now + 10 * 60_000, horizonDays: 7, label: tod.label, windowMinStart: tod.start, windowMinEnd: tod.end };
+  }
   return null;
 }
 

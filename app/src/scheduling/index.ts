@@ -109,10 +109,10 @@ export interface SuggestResult {
  *  (from a user timing comment like "last week of this month") constrain the search window. */
 export async function suggestForText(
   db: SQLiteDatabase, text: string,
-  opts?: { durationMin?: number; deadline?: string | null; maxResults?: number; earliestStart?: number; horizonDays?: number },
+  opts?: { durationMin?: number; deadline?: string | null; maxResults?: number; earliestStart?: number; horizonDays?: number; preferWindowMin?: { start: number; end: number } },
 ): Promise<SuggestResult> {
   const meta = classifyTask(text, { durationMin: opts?.durationMin, deadline: opts?.deadline ?? null });
-  return suggestForMeta(db, meta, opts?.maxResults, { earliestStart: opts?.earliestStart, horizonDays: opts?.horizonDays });
+  return suggestForMeta(db, meta, opts?.maxResults, { earliestStart: opts?.earliestStart, horizonDays: opts?.horizonDays, preferWindowMin: opts?.preferWindowMin });
 }
 
 export async function suggestForTodo(db: SQLiteDatabase, todoId: number, maxResults?: number): Promise<SuggestResult | null> {
@@ -124,7 +124,7 @@ export async function suggestForTodo(db: SQLiteDatabase, todoId: number, maxResu
   return r;
 }
 
-async function suggestForMeta(db: SQLiteDatabase, meta: SchedTaskMeta, maxResults?: number, win?: { earliestStart?: number; horizonDays?: number }): Promise<SuggestResult> {
+async function suggestForMeta(db: SQLiteDatabase, meta: SchedTaskMeta, maxResults?: number, win?: { earliestStart?: number; horizonDays?: number; preferWindowMin?: { start: number; end: number } }): Promise<SuggestResult> {
   const av = await getAvailability(db);
   const now = Date.now();
   // A timing constraint ("last week of this month") widens the horizon so slots can land in that window.
@@ -133,7 +133,7 @@ async function suggestForMeta(db: SQLiteDatabase, meta: SchedTaskMeta, maxResult
     ? Math.min(Date.parse(meta.deadline), startOfLocalDay(now) + (horizonDays + 1) * DAY)
     : startOfLocalDay(now) + (horizonDays + 1) * DAY;
   const { resourceBlocks, hardBlocks } = await buildBusy(db, now, to, av);
-  const slots = findSlots({ meta, hardBlocks, resourceBlocks, availability: av, now, maxResults: maxResults ?? 3, horizonDays, earliestStart: win?.earliestStart });
+  const slots = findSlots({ meta, hardBlocks, resourceBlocks, availability: av, now, maxResults: maxResults ?? 3, horizonDays, earliestStart: win?.earliestStart, preferWindowMin: win?.preferWindowMin });
   return {
     meta,
     suggestions: slots.map((s) => ({ ...s, rationale: rationale(meta, s.start, s.end, s.reasons) })),

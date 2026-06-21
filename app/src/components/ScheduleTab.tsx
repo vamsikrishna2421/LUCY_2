@@ -202,9 +202,14 @@ export function ScheduleTab() {
     try {
       const { parseTimingConstraint } = await import('../scheduling/timingConstraint');
       const c = parseTimingConstraint(comment);
-      if (!c) { setInfoSheet({ title: 'When should it be?', message: 'Try things like "last week of this month", "not tomorrow", "after the 25th", or "next week".', actions: [{ label: 'Got it', style: 'primary' }], cancelLabel: null }); return; }
+      if (!c) { setInfoSheet({ title: 'When should it be?', message: 'Try things like "in the morning", "tomorrow afternoon", "this evening", "not tomorrow", "after the 25th", or "next week".', actions: [{ label: 'Got it', style: 'primary' }], cancelLabel: null }); return; }
       const db = await getDatabase();
-      const r = await suggestForText(db, sugg.meta.title, { durationMin: sugg.meta.durationMin, earliestStart: c.earliestStart, horizonDays: c.horizonDays });
+      const r = await suggestForText(db, sugg.meta.title, {
+        durationMin: sugg.meta.durationMin,
+        earliestStart: c.earliestStart,
+        horizonDays: c.horizonDays,
+        preferWindowMin: c.windowMinStart != null && c.windowMinEnd != null ? { start: c.windowMinStart, end: c.windowMinEnd } : undefined,
+      });
       setSugg({ meta: r.meta, suggestions: r.suggestions, todoId: sugg.todoId, windowLabel: c.label });
       setSuggKey((k) => k + 1);
       setRefineText('');
