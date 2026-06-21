@@ -71,3 +71,11 @@ metrics dashboard) that 1.0 lacked. Ship something **real and runnable**, not va
   Notifications) + iOS/Android audit fixes (keyboard, Android back, LucyOrb Android gradient bug, dynamic-type
   cap) + render-test harness (16/16). Galaxy Alert.prompt→sheet adjudicated as real bug (Android), applied.
   Dashboard (4058 ln, the home screen) dispatched to screens2 for a dedicated single-pass redesign.
+- 2026-06-21 (cont.): Dashboard fully redesigned (Timeline/FocusNow/Library/Health + shell), 4058→538 ln.
+  Phase 5 QA report (docs/13). Visual previews rendered (preview/png: home, capture, ask, paywall, design-system).
+- 2026-06-21 (cont.): TestFlight RELEASE. iOS build 2.0.2 succeeded on EAS (reused 1.0 creds, no 2FA; fixed
+  Sentry map-upload via SENTRY_DISABLE_AUTO_UPLOAD; stripped secret EXPO_PUBLIC keys so nothing inlines) and
+  SUBMITTED to TestFlight (ASC app 6774077314) on owner's "submit".
+- 2026-06-21 (cont.): Owner's 2 real-bug fixes APPLIED (Free Up Space: embedded confirm/Toast + batched
+  hardDeleteCaptures fixes the dead delete; +Select-all chip) — frozen db/captures.ts touched as sanctioned
+  real-bug exception. typecheck 0. Android build (android-release apk) triggered.
