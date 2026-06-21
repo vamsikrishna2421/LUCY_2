@@ -1,0 +1,282 @@
+{
+  "expo": {
+    "name": "LUCY",
+    "slug": "lucy",
+    "scheme": "lucy",
+    "version": "1.3.0",
+    "orientation": "portrait",
+    "icon": "./assets/lucy-eye-icon.png",
+    "userInterfaceStyle": "dark",
+    "runtimeVersion": "5",
+    "updates": {
+      "url": "https://u.expo.dev/1a602e40-067f-4786-a9a6-26c6cc15bda6",
+      "requestHeaders": { "expo-channel-name": "production" },
+      "fallbackToCacheTimeout": 0
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.lucy",
+      "buildNumber": "1.0.152",
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.anonymous.lucy"
+        ],
+        "com.apple.developer.usernotifications.time-sensitive": true
+      },
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSSupportsLiveActivities": true,
+        "UIBackgroundModes": ["audio"],
+        "LSApplicationQueriesSchemes": [
+          "tel",
+          "sms",
+          "maps",
+          "comgooglemaps",
+          "spotify",
+          "music",
+          "shortcuts",
+          "x-apple-reminderkit",
+          "calshow"
+        ],
+        "NSMicrophoneUsageDescription": "LUCY listens in the background to capture your thoughts, ideas, and songs automatically.",
+        "NSSpeechRecognitionUsageDescription": "LUCY uses on-device speech recognition to transcribe what you say during passive listening mode.",
+        "NSPhotoLibraryUsageDescription": "LUCY may save audio recordings to your library when capturing memories.",
+        "NSCameraUsageDescription": "LUCY uses the camera to scan receipts and food (meals & barcodes) so it can track expenses and calories automatically.",
+        "NSHealthShareUsageDescription": "LUCY reads your activity, sleep, and heart data so it can show your health analytics and gently guide you. This stays on your device.",
+        "NSHealthUpdateUsageDescription": "LUCY can save wellness data you log (like water or mindful minutes) back to Apple Health.",
+        "NSCalendarsUsageDescription": "LUCY reads your calendar to send pre-meeting briefs and help you prepare — all data stays on your device.",
+        "NSCalendarsFullAccessUsageDescription": "LUCY reads your calendar (incl. Google, Outlook & Teams accounts on your phone) to show your events and schedule around them — all data stays on your device.",
+        "NSRemindersFullAccessUsageDescription": "LUCY can read your reminders to keep your schedule complete — all data stays on your device.",
+        "NSLocationWhenInUseUsageDescription": "LUCY uses your location to add context to your daily brief and answer location questions — never shared externally.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "LUCY records your city-level location (~1 mile precision) once per hour to build your personal travel timeline — never precise GPS, never shared externally.",
+        "NSLocationAlwaysUsageDescription": "LUCY records your city-level location once per hour for your travel timeline. Data stays on your device.",
+        "LSSupportsOpeningDocumentsInPlace": false,
+        "CFBundleDocumentTypes": [
+          {
+            "CFBundleTypeName": "Text Document",
+            "CFBundleTypeRole": "Viewer",
+            "LSHandlerRank": "Alternate",
+            "LSItemContentTypes": [
+              "public.plain-text",
+              "public.utf8-plain-text",
+              "net.daringfireball.markdown",
+              "public.text"
+            ]
+          }
+        ],
+        "UTImportedTypeDeclarations": [
+          {
+            "UTTypeIdentifier": "net.daringfireball.markdown",
+            "UTTypeDescription": "Markdown",
+            "UTTypeConformsTo": ["public.plain-text"],
+            "UTTypeTagSpecification": {
+              "public.filename-extension": ["md", "markdown"],
+              "public.mime-type": "text/markdown"
+            }
+          }
+        ]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0D1015",
+        "foregroundImage": "./assets/lucy-eye-adaptive.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "softwareKeyboardLayoutMode": "resize",
+      "package": "com.anonymous.lucy",
+      "versionCode": 104,
+      "intentFilters": [
+        {
+          "action": "SEND",
+          "data": [
+            {"mimeType": "text/plain"},
+            {"mimeType": "text/markdown"},
+            {"mimeType": "text/*"}
+          ],
+          "category": ["DEFAULT"]
+        },
+        {
+          "action": "SEND",
+          "data": [
+            {"mimeType": "image/*"},
+            {"mimeType": "application/pdf"}
+          ],
+          "category": ["DEFAULT"]
+        },
+        {
+          "action": "SEND_MULTIPLE",
+          "data": [
+            {"mimeType": "image/*"},
+            {"mimeType": "application/pdf"}
+          ],
+          "category": ["DEFAULT"]
+        }
+      ],
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.INTERNET",
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR",
+        "android.permission.READ_CONTACTS",
+        "android.permission.SET_ALARM",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/lucy-icon.png"
+    },
+    "plugins": [
+      "./plugins/withExecutorchJar",
+      [
+        "expo-live-activity",
+        {
+          "silentOnUnsupportedOS": true
+        }
+      ],
+      [
+        "expo-sqlite",
+        {
+          "useSQLCipher": true
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "LUCY accesses your photos so you can scan a saved receipt to track an expense.",
+          "cameraPermission": "LUCY uses the camera to scan receipts so it can track your expenses automatically."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "LUCY saves meeting summary cards to your photo library when you choose to.",
+          "savePhotosPermission": "LUCY saves meeting summary cards to your photo library when you choose to.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ],
+      [
+        "expo-sharing",
+        {
+          "ios": {
+            "enabled": true,
+            "activationRule": {
+              "supportsText": true,
+              "supportsWebUrlWithMaxCount": 1,
+              "supportsImageWithMaxCount": 10,
+              "supportsFileWithMaxCount": 10
+            }
+          },
+          "android": {
+            "enabled": true,
+            "singleShareMimeTypes": [
+              "text/plain",
+              "text/markdown",
+              "text/*",
+              "image/*",
+              "application/pdf"
+            ]
+          }
+        }
+      ],
+      "expo-notifications",
+      "expo-background-task",
+      "@kingstinct/react-native-healthkit",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0F0E0B",
+          "image": "./assets/splash-blank.png",
+          "imageWidth": 1
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "LUCY uses the microphone to record your thoughts in Listen mode and during meetings.",
+          "speechRecognitionPermission": "LUCY uses speech recognition to turn your voice into private on-device text."
+        }
+      ],
+      ["expo-audio", { "microphonePermission": "LUCY uses the microphone to record your thoughts in Listen mode and during meetings.", "enableBackgroundRecording": true }],
+      "expo-localization",
+      "expo-asset",
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "LUCY looks up a contact's number only when you confirm an action like calling or messaging them. Contacts are never uploaded."
+        }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "LUCY adds events you confirm (like meetings) to your calendar and reads it to prepare your daily brief.",
+          "remindersPermission": "LUCY adds reminders you confirm to your Reminders lists."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 24,
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "extraProguardRules": "-keep class org.pytorch.** { *; }\n-keep class com.swmansion.rnexecutorch.** { *; }\n-keep class com.facebook.jni.** { *; }\n-dontwarn org.pytorch.**",
+            "useLegacyPackaging": true,
+            "abiFilters": ["arm64-v8a"],
+            "manifestQueries": {
+              "package": [
+                "com.spotify.music",
+                "com.google.android.apps.maps",
+                "com.android.deskclock",
+                "com.google.android.deskclock"
+              ],
+              "intent": [
+                { "action": "android.intent.action.VIEW", "data": { "scheme": "tel" } },
+                { "action": "android.intent.action.DIAL", "data": { "scheme": "tel" } },
+                { "action": "android.intent.action.VIEW", "data": { "scheme": "sms" } },
+                { "action": "android.intent.action.SENDTO", "data": { "scheme": "smsto" } },
+                { "action": "android.intent.action.VIEW", "data": { "scheme": "geo" } },
+                { "action": "android.intent.action.VIEW", "data": { "scheme": "mailto" } },
+                { "action": "android.intent.action.SET_TIMER" },
+                { "action": "android.intent.action.INSERT", "data": { "mimeType": "vnd.android.cursor.item/event" } }
+              ]
+            }
+          },
+          "ios": {
+            "deploymentTarget": "17.0",
+            "buildSettings": {
+              "SWIFT_ENABLE_INCREMENTAL_COMPILATION": "NO",
+              "ENABLE_USER_SCRIPT_SANDBOXING": "NO"
+            }
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "build": {
+          "experimental": {
+            "ios": {
+              "appExtensions": [
+                {
+                  "targetName": "expo-sharing-extension",
+                  "bundleIdentifier": "com.anonymous.lucy.expo-sharing-extension",
+                  "entitlements": {
+                    "com.apple.security.application-groups": [
+                      "group.com.anonymous.lucy"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "projectId": "1a602e40-067f-4786-a9a6-26c6cc15bda6"
+      }
+    },
+    "owner": "lekkala2421"
+  }
+}

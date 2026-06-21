@@ -1,0 +1,259 @@
+/**
+ * Voice command router — the brain behind "Hey Lucy, …". Turns a natural-language command into a
+ * concrete app ACTION across every feature, executes it, and returns a spoken confirmation + an
+ * optional navigation hint. Used by the in-app voice button and the web Hey-Lucy bar (/api/voice).
+ *
+ * "Hey Lucy, schedule a 15 min walk this evening at 6:30" → creates the calendar block + says it back.
+ */
+import { jsonrepair } from 'jsonrepair';
+import type { SQLiteDatabase } from 'expo-sqlite';
+import { getDatabase } from '../db';
+import { logVoiceActionToTimeline } from '../db/captures';
+import { computeStart } from './timeResolve';
+import type { AskTurn } from '../processing/ask';
+
+export type VoiceIntent = 'schedule' | 'capture' | 'task' | 'mood' | 'link' | 'project' | 'navigate' | 'ask' | 'food';
+
+export interface VoiceResult {
+  ok: boolean;
+  intent: VoiceIntent;
+  speak: string;            // what LUCY says back (TTS)
+  navigate?: string | null; // a section key the UI should open
+  data?: Record<string, unknown>;
+}
+
+const VOICE_SYSTEM = `You are LUCY's voice command interpreter. Convert the user's spoken request into ONE structured action. Return STRICT JSON only — no markdown:
+{"intent":"schedule|capture|task|mood|link|project|navigate|ask|food",
+ "title":"<concise title/content>",
+ "durationMin":<integer or null>,
+ "time":"<HH:MM 24-hour, or null>",
+ "day":"today|tomorrow|<weekday like monday/friday>|next <weekday>|<YYYY-MM-DD>|null",
+ "url":"<url or null>",
+ "tone":"positive|neutral|low|negative|null",
+ "section":"home|timeline|ask|tasks|calendar|documents|resources|projects|brain|people|health|money|null",
+ "text":"<raw text for capture/ask>",
+ "projectOp":"create|rename|append|null",
+ "projectTarget":"<the EXISTING project being referred to, for rename/append, or null>",
+ "projectDetail":"<for append: the detail to add; for rename: the new name; else null>",
+ "speak":"<one short friendly first-person confirmation, under 18 words>"}
+Rules:
+- "schedule/book/block/add … at <time>" or "find time for …" → intent "schedule" (title = the activity; durationMin default 30 if unsaid; fill time+day when given).
+- "remember/note/capture/save that …" → "capture" (text = the thing to remember).
+- "add a task/todo/remind me to …" → "task" (title = the task).
+- "I ate/had …", "log my breakfast/lunch/dinner …", "log food/meal …" → "food" (text = the foods eaten, verbatim).
+- "I feel …/log my mood …" → "mood" (tone).
+- "save this link/add bookmark <url>" → "link" (url + title).
+- "create/start a project …" → "project" (projectOp "create", title = name).
+- "rename/name that/the <X> project to <Y>" or "call the <X> project <Y>" → "project" (projectOp "rename", projectTarget = X, projectDetail = Y). If they say "name THAT project Y" without X, set projectTarget null (LUCY uses the most recent project).
+- "add to the <X> project: <detail>" / "for the <X> project, also …" → "project" (projectOp "append", projectTarget = X, projectDetail = the detail).
+- "open/go to/show me <section>" → "navigate" (section).
+- Any question or anything else → "ask" (text = the full question).
+- speak is natural, first-person as LUCY, confirms what you did or will do.`;
+
+
+interface ParsedCommand {
+  intent: VoiceIntent; title?: string; durationMin?: number | null; time?: string | null; day?: string | null;
+  url?: string | null; tone?: string | null; section?: string | null; text?: string | null; speak?: string;
+  projectOp?: 'create' | 'rename' | 'append' | null; projectTarget?: string | null; projectDetail?: string | null;
+}
+
+async function interpret(text: string, context?: string): Promise<ParsedCommand> {
+  const { resolveRemoteAvailability } = await import('../ai/provider');
+  const { promptAI } = await import('../ai/openai');
+  const { promptDevice } = await import('../ai/device');
+  const { available, openAIKey } = await resolveRemoteAvailability();
+  // Context-aware: the single mic button acts on whatever screen the user is on. Bias ambiguous
+  // requests toward that screen's actions (e.g. a bare phrase on Calendar → schedule).
+  const ctx = context ? `\nThe user is currently on the "${context}" screen. If the request is ambiguous, prefer actions for that screen.` : '';
+  const sys = VOICE_SYSTEM + ctx;
+  let raw: string;
+  try {
+    raw = available ? await promptAI(sys, text, openAIKey) : await promptDevice(`${sys}\n${text}\n/no_think`);
+  } catch {
+    return { intent: 'ask', text, speak: '' };
+  }
+  try {
+    const s = raw.indexOf('{'); const e = raw.lastIndexOf('}');
+    const obj = JSON.parse(jsonrepair(s >= 0 ? raw.slice(s, e + 1) : raw)) as ParsedCommand;
+    if (!obj.intent) obj.intent = 'ask';
+    return obj;
+  } catch {
+    return { intent: 'ask', text, speak: '' };
+  }
+}
+
+/** Is this a "how do I / where is / how to use the app" help question? */
+export function isHelpQuery(text: string): boolean {
+  return /\b(how (do|can) i|how to|where (is|are|do i|can i)|how does (lucy|the app|this) work|what can (you|lucy) do|help me (use|with)|i don.?t know (how|where)|guide me|show me how)\b/i.test(text);
+}
+
+/** Answer a help question from LUCY's built-in manual. Returns null when not covered (caller falls through to askLucy). */
+async function answerFromManual(question: string): Promise<string | null> {
+  try {
+    const { LUCY_MANUAL } = await import('./appManual');
+    const { resolveRemoteAvailability } = await import('../ai/provider');
+    const { promptAI } = await import('../ai/openai');
+    const { promptDevice } = await import('../ai/device');
+    const sys = `You are LUCY, a personal AI assistant. A user asked how to do something in the app. Using ONLY the app knowledge below, answer in 1-3 short sentences, speaking as yourself in first person ("I", "you can", "tap…"). Tell them exactly WHERE to tap. If the answer is NOT in the knowledge below, reply with exactly the token: NOT_COVERED\n\nAPP KNOWLEDGE:\n${LUCY_MANUAL}`;
+    const { available, openAIKey } = await resolveRemoteAvailability();
+    const raw = available ? await promptAI(sys, question, openAIKey) : await promptDevice(`${sys}\n\nQ: ${question}\n/no_think`);
+    return raw.includes('NOT_COVERED') ? null : raw.trim() || null;
+  } catch { return null; }
+}
+
+/** Interpret a spoken command and EXECUTE it. Returns what to say + where to navigate. */
+export async function runVoiceCommand(text: string, dbArg?: SQLiteDatabase, context?: string, history?: AskTurn[]): Promise<VoiceResult> {
+  const db = dbArg ?? await getDatabase();
+  const cmd = await interpret(text, context);
+  const now = Date.now();
+
+  switch (cmd.intent) {
+    case 'schedule': {
+      const title = (cmd.title || 'Untitled').trim();
+      // Always keep a faithful timeline note of what the user said, in addition to scheduling it.
+      await logVoiceActionToTimeline(db, 'voice', text, title);
+      const { classifyTask, detectRecurrence } = await import('../scheduling/classify');
+      const meta = classifyTask(title, { durationMin: cmd.durationMin ?? undefined });
+      // Recurrence is usually in the spoken command ("every day"), not the extracted title — read both.
+      const rec = meta.recurrence || detectRecurrence(text);
+      const recLabel = rec === 'weekdays' ? 'every weekday' : rec === 'weekly' ? 'weekly' : 'every day';
+      const explicit = computeStart(cmd.day ?? null, cmd.time ?? null, now);
+      const { commitBlock, commitSeries, suggestForText } = await import('../scheduling');
+      const dur = Math.max(5, meta.durationMin) * 60_000;
+      if (explicit) {
+        const endMs = explicit + dur;
+        if (rec) {
+          const { count } = await commitSeries(db, { title, startMs: explicit, endMs, resources: meta.resources, energy: meta.energy, location: meta.location }, rec);
+          const at = new Date(explicit).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+          return { ok: true, intent: 'schedule', speak: cmd.speak || `Done — "${title}" ${recLabel} at ${at} (${count} added).`, navigate: 'calendar' };
+        }
+        const r = await commitBlock(db, { title, startMs: explicit, endMs, resources: meta.resources, energy: meta.energy, location: meta.location }, { force: true });
+        const when = new Date(explicit).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+        return { ok: true, intent: 'schedule', speak: r.conflict ? `Added "${title}" at ${when} — heads up, it overlaps something else.` : (cmd.speak || `Done — "${title}" is on your calendar at ${when}.`), navigate: 'calendar', data: { blockId: r.blockId } };
+      }
+      const sug = await suggestForText(db, title);
+      if (!sug.suggestions.length) return { ok: false, intent: 'schedule', speak: `I couldn't find a free slot for "${title}".`, navigate: 'calendar' };
+      const top = sug.suggestions[0];
+      const when = new Date(top.start).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+      if (rec) {
+        const { count } = await commitSeries(db, { title, startMs: top.start, endMs: top.end, resources: sug.meta.resources, energy: sug.meta.energy, location: sug.meta.location }, rec);
+        const at = new Date(top.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        return { ok: true, intent: 'schedule', speak: cmd.speak || `Scheduled "${title}" ${recLabel} at ${at} (${count} added).`, navigate: 'calendar' };
+      }
+      const r = await commitBlock(db, { title, startMs: top.start, endMs: top.end, resources: sug.meta.resources, energy: sug.meta.energy, location: sug.meta.location });
+      return { ok: r.ok, intent: 'schedule', speak: cmd.speak || `Scheduled "${title}" for ${when}.`, navigate: 'calendar', data: { blockId: r.blockId } };
+    }
+    case 'capture': {
+      // Capture the user's ACTUAL words, not the model's paraphrase. The interpreter sometimes
+      // returns a meta-description in cmd.text (e.g. "User wants to log a past activity — awaiting
+      // details") which then fails extraction; the original utterance is the faithful memory.
+      const body = (text || cmd.text || cmd.title || '').trim();
+      if (!body) return { ok: false, intent: 'capture', speak: 'What should I remember?' };
+      const { enqueueTranscript, processQueue } = await import('../processing/extract');
+      await enqueueTranscript(body, 'text'); void processQueue();
+      return { ok: true, intent: 'capture', speak: cmd.speak || 'Captured — I’ll organize it.', navigate: 'timeline' };
+    }
+    case 'task': {
+      const task = (cmd.title || cmd.text || '').trim();
+      if (!task) return { ok: false, intent: 'task', speak: 'What task should I add?' };
+      // Lists (any comma-separated content) go through extraction so each item becomes a separate task.
+      // Simple single tasks (no commas) get a fast direct insert.
+      if (task.includes(',')) {
+        const { enqueueTranscript, processQueue } = await import('../processing/extract');
+        await enqueueTranscript(task, 'text');
+        void processQueue();
+        return { ok: true, intent: 'task', speak: `Got it — I'll split that into individual tasks.`, navigate: 'tasks' };
+      }
+      await db.runAsync("INSERT INTO todos (task, category, urgency, context, status) VALUES (?, 'general', 'medium', '', 'pending')", task);
+      // Single direct-insert tasks skip extraction, so log a timeline note here (comma-lists already
+      // go through the extractor above, which writes its own timeline capture).
+      await logVoiceActionToTimeline(db, 'voice', text, task);
+      return { ok: true, intent: 'task', speak: cmd.speak || `Added "${task}" to your tasks.`, navigate: 'tasks' };
+    }
+    case 'mood': {
+      const tone = ['positive', 'neutral', 'low', 'negative'].includes(String(cmd.tone)) ? String(cmd.tone) : 'neutral';
+      await db.runAsync("INSERT INTO mood_entries (tone, energy) VALUES (?, 'medium')", tone);
+      await logVoiceActionToTimeline(db, 'voice', text, `Mood: feeling ${tone}`);
+      return { ok: true, intent: 'mood', speak: cmd.speak || `Logged that you’re feeling ${tone}.`, navigate: 'health' };
+    }
+    case 'food': {
+      const meal = (cmd.text || cmd.title || text || '').trim();
+      if (!meal) return { ok: false, intent: 'food', speak: 'What did you eat?' };
+      const { logFoodFromText } = await import('../processing/foodNutrition');
+      const r = await logFoodFromText(db, meal);
+      await logVoiceActionToTimeline(db, 'voice', text, `Ate: ${meal}`);
+      if (!r.estimated) return { ok: true, intent: 'food', speak: cmd.speak || 'Logged it. I couldn’t estimate the calories from that — tell me roughly what and how much and I’ll add them.', navigate: 'health' };
+      const kcal = r.items.reduce((s, i) => s + (i.calories ?? 0), 0);
+      return { ok: true, intent: 'food', speak: cmd.speak || `Logged ${r.logged} item${r.logged === 1 ? '' : 's'} — about ${kcal} calories.`, navigate: 'health' };
+    }
+    case 'link': {
+      const url = (cmd.url || '').trim();
+      if (!url) return { ok: false, intent: 'link', speak: 'What link should I save?' };
+      await db.runAsync(
+        "INSERT OR IGNORE INTO online_resources (url, title, platform, topic) VALUES (?, ?, 'web', 'General')",
+        url, (cmd.title || url).trim(),
+      );
+      await logVoiceActionToTimeline(db, 'voice', text, (cmd.title || url).trim());
+      return { ok: true, intent: 'link', speak: cmd.speak || 'Saved that link to your resources.', navigate: 'resources' };
+    }
+    case 'project': {
+      const { createProject, listProjects, updateProject } = await import('../db/projects');
+      const op = cmd.projectOp ?? 'create';
+      // Resolve which EXISTING project the user means (fuzzy by name; fall back to the most recent).
+      const findTarget = async (hint: string | null) => {
+        const projects = await listProjects(db);
+        if (!projects.length) return null;
+        const h = (hint ?? '').toLowerCase().replace(/\bproject\b/g, '').trim();
+        if (!h) return projects[0]; // most recent (listProjects is created_at DESC)
+        const norm = (s: string) => s.toLowerCase().replace(/\bproject\b/g, '').trim();
+        return projects.find((p) => norm(p.name) === h)
+          || projects.find((p) => norm(p.name).includes(h) || h.includes(norm(p.name)))
+          || null;
+      };
+
+      if (op === 'rename') {
+        const newName = (cmd.projectDetail || cmd.title || '').trim();
+        if (!newName) return { ok: false, intent: 'project', speak: 'What should I rename it to?' };
+        const target = await findTarget(cmd.projectTarget ?? null);
+        if (!target) return { ok: false, intent: 'project', speak: `I couldn't find that project to rename.` };
+        await updateProject(db, target.id, { name: newName });
+        await logVoiceActionToTimeline(db, 'voice', text, `Renamed project "${target.name}" → "${newName}"`);
+        return { ok: true, intent: 'project', speak: cmd.speak || `Renamed "${target.name}" to "${newName}".`, navigate: 'projects' };
+      }
+      if (op === 'append') {
+        const detail = (cmd.projectDetail || cmd.text || '').trim();
+        if (!detail) return { ok: false, intent: 'project', speak: 'What should I add to the project?' };
+        const target = await findTarget(cmd.projectTarget ?? null);
+        if (!target) return { ok: false, intent: 'project', speak: `I couldn't find that project.` };
+        const merged = `${target.description ? `${target.description}\n` : ''}${detail}`.trim();
+        await updateProject(db, target.id, { description: merged });
+        await logVoiceActionToTimeline(db, 'voice', text, `Updated project "${target.name}": ${detail}`);
+        return { ok: true, intent: 'project', speak: cmd.speak || `Added that to "${target.name}".`, navigate: 'projects' };
+      }
+      // create (default)
+      const name = (cmd.title || '').trim();
+      if (!name) return { ok: false, intent: 'project', speak: 'What should I name the project?' };
+      await createProject(db, name, null);
+      await logVoiceActionToTimeline(db, 'voice', text, `Project: ${name}`);
+      return { ok: true, intent: 'project', speak: cmd.speak || `Created the "${name}" project.`, navigate: 'projects' };
+    }
+    case 'navigate': {
+      const section = (cmd.section || 'home').trim();
+      return { ok: true, intent: 'navigate', speak: cmd.speak || `Opening ${section}.`, navigate: section };
+    }
+    default: {
+      // Live demo / walkthrough / tour requests → use the rich conversational path (history +
+      // live screen aware) so LUCY can guide step by step, NOT the one-shot manual answer.
+      const isDemoRequest = /\b(demo|walk ?through|walk me through|tour|show me around|present(ation)?|guide me through)\b/i.test(text);
+      // Help / how-to questions about using the app → answer from the built-in manual.
+      if (!isDemoRequest && isHelpQuery(text)) {
+        const speak = await answerFromManual((cmd.text || text).trim());
+        if (speak) return { ok: true, intent: 'ask', speak };
+      }
+      const { askLucy } = await import('../processing/ask');
+      const ans = await askLucy((cmd.text || text).trim(), undefined, history ?? [], context);
+      const reply = (ans.llmResponse || ans.message || '').trim() || 'I’m not sure about that one.';
+      return { ok: true, intent: 'ask', speak: reply, navigate: ans.answerKind === 'schedule' ? 'calendar' : null };
+    }
+  }
+}

@@ -1,0 +1,71 @@
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env
+.env.*
+!.env.example
+.env*.local
+
+# typescript
+*.tsbuildinfo
+
+# generated native folders
+/ios
+/android
+
+# Local benchmark source material and generated benchmark results
+/kaggle_dataset.zip
+/benchmarks/kaggle-eleanor/raw/
+/benchmarks/kaggle-eleanor/results/
+/dist/
+
+# NOTE: a previous block here tried to ignore shell-accident junk files with broad globs
+# (datetime*, uri, *.id, Boolean*, *.confidence, …). Those silently swallowed real source files,
+# so they were removed. Junk fragments are avoided by staging files explicitly, not by gitignore.
+
+# Build logs
+*.log
+
+# Local vector DB (dev/bench artifact, regenerated at runtime)
+ruvector.db
+*.db
+
+# Playground (design iteration files)
+/playground/
+
+# Codemagic cert files
+codemagic_cert.pem
+
+# Memory exports / scratch dumps at repo root — contain personal data, must NOT be committed
+/mem*.json
+/mem_tmp.json

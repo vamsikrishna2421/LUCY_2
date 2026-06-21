@@ -1,0 +1,59 @@
+# ── Secrets (NEVER commit) ─────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+**/secrets.json
+**/google-services.json
+**/GoogleService-Info.plist
+
+# ── Dependencies ───────────────────────────────────────────────────────
+node_modules/
+**/node_modules/
+.pnp
+.pnp.js
+
+# ── Expo / React Native ────────────────────────────────────────────────
+.expo/
+**/.expo/
+dist/
+**/dist/
+web-build/
+*.orig.*
+app/ios/
+app/android/
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+
+# ── Next.js dashboard ──────────────────────────────────────────────────
+dashboard/.next/
+dashboard/out/
+dashboard/build/
+
+# ── Build / data artifacts ─────────────────────────────────────────────
+*.log
+*.tsbuildinfo
+*.zip
+*.db
+*.sqlite
+ruvector.db
+coverage/
+
+# ── OS / editor ────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# ── Agent / tooling local state ────────────────────────────────────────
+.claude/
+.claude-flow/
+.swarm/
+ask_work.json
+hist_work.json
+lucy1_src/

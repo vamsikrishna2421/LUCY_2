@@ -1,0 +1,973 @@
+/**
+ * LAN companion server — the phone hosts a tiny web dashboard on the local WiFi so a
+ * laptop browser can view and control LUCY's memory bidirectionally. No cloud: the
+ * laptop connects straight to the phone's LAN IP. Foreground-only, PIN-gated, off by default.
+ *
+ * Built on react-native-tcp-socket with a minimal HTTP/1.1 layer (one request per
+ * connection, Connection: close). Native module loaded lazily so the rest of the app is
+ * unaffected if it's unavailable.
+ */
+import * as Network from 'expo-network';
+import { getDatabase } from '../db';
+import { DASHBOARD_HTML } from './dashboardHtml';
+
+export interface ServerState {
+  running: boolean;
+  ip: string | null;
+  port: number;
+  pin: string | null;
+  error: string | null;
+}
+
+const PORT = 8088;
+// The dashboard HTML is pulled from the public repo at runtime so it can be iterated
+// WITHOUT an app rebuild: edit web/dashboard.html → push → POST /api/dashboard/refresh.
+// Uses the GitHub API (Accept: raw) instead of raw.githubusercontent.com because the raw
+// CDN caches by path and ignores cache-busters (stale for minutes); the API isn't CDN-
+// cached, so refresh is instant. The baked-in DASHBOARD_HTML is the offline/first-run fallback.
+const DASHBOARD_API_URL = 'https://api.github.com/repos/vamsikrishna2421/lucy/contents/web/dashboard.html?ref=master';
+let dashboardCache: string | null = null;
+let lastDashboardFetchAt = 0; // for the auto-refresh debounce on page load
+
+interface TcpServer { close: () => void; listen?: (opts: unknown) => void; on?: (e: string, cb: (a: unknown) => void) => void; }
+let server: TcpServer | null = null;
+
+/** Pulls the latest dashboard from the repo and caches it. Returns bytes (0 on failure).
+ *  Tries the GitHub API first, then falls back to raw.githubusercontent (different rate-limit bucket)
+ *  so a 403 on the shared-WiFi IP's API quota doesn't strand the phone on the baked-in fallback. */
+async function fetchRemoteDashboard(): Promise<number> {
+  lastDashboardFetchAt = Date.now(); // mark the attempt up front so concurrent loads don't stampede
+  const sources = [
+    { url: `${DASHBOARD_API_URL}&t=${Date.now()}`, accept: 'application/vnd.github.raw' },
+    { url: `https://raw.githubusercontent.com/vamsikrishna2421/lucy/master/web/dashboard.html?t=${Date.now()}`, accept: 'text/html' },
+  ];
+  for (const src of sources) {
+    try {
+      const res = await fetch(src.url, {
+        headers: { Accept: src.accept, 'User-Agent': 'LUCY-app', 'Cache-Control': 'no-cache' },
+      });
+      if (!res.ok) continue;
+      const html = await res.text();
+      if (html && html.includes('</html>')) { dashboardCache = html; return html.length; }
+    } catch { /* try the next source */ }
+  }
+  // All sources failed — clear the debounce stamp so the very next page load retries immediately
+  // instead of serving the bare fallback for 15s.
+  lastDashboardFetchAt = 0;
+  return 0;
+}
+let state: ServerState = { running: false, ip: null, port: PORT, pin: null, error: null };
+const listeners = new Set<(s: ServerState) => void>();
+
+function setState(patch: Partial<ServerState>): void {
+  state = { ...state, ...patch };
+  listeners.forEach((l) => l(state));
+}
+
+export function getServerState(): ServerState { return state; }
+export function subscribeServer(fn: (s: ServerState) => void): () => void {
+  listeners.add(fn); fn(state); return () => listeners.delete(fn);
+}
+
+// ─── HTTP helpers ──────────────────────────────────────────────────────────────
+interface ParsedRequest { method: string; path: string; query: Record<string, string>; headers: Record<string, string>; body: string; }
+
+/** UTF-8 byte length of a string (HTTP Content-Length must be bytes, not JS chars). */
+function utf8Len(s: string): number {
+  let n = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c < 0x80) n += 1;
+    else if (c < 0x800) n += 2;
+    else if (c >= 0xd800 && c <= 0xdbff) { n += 4; i++; } // surrogate pair (emoji)
+    else n += 3;
+  }
+  return n;
+}
+
+function parseRequest(raw: string): ParsedRequest | null {
+  const headerEnd = raw.indexOf('\r\n\r\n');
+  if (headerEnd === -1) return null;
+  const head = raw.slice(0, headerEnd);
+  const lines = head.split('\r\n');
+  const [method, fullPath] = lines[0].split(' ');
+  if (!method || !fullPath) return null;
+  const headers: Record<string, string> = {};
+  for (let i = 1; i < lines.length; i++) {
+    const idx = lines[i].indexOf(':');
+    if (idx > 0) headers[lines[i].slice(0, idx).trim().toLowerCase()] = lines[i].slice(idx + 1).trim();
+  }
+  const contentLength = parseInt(headers['content-length'] ?? '0', 10) || 0;
+  const body = raw.slice(headerEnd + 4);
+  if (utf8Len(body) < contentLength) return null; // wait for the full body (byte-accurate)
+  const [path, qs] = fullPath.split('?');
+  const query: Record<string, string> = {};
+  if (qs) for (const pair of qs.split('&')) { const [k, v] = pair.split('='); query[decodeURIComponent(k)] = decodeURIComponent(v ?? ''); }
+  return { method, path, query, headers, body };
+}
+
+function httpResponse(status: number, contentType: string, body: string): string {
+  const statusText = status === 200 ? 'OK' : status === 401 ? 'Unauthorized' : status === 404 ? 'Not Found' : status === 204 ? 'No Content' : 'Error';
+  return `HTTP/1.1 ${status} ${statusText}\r\n`
+    + `Content-Type: ${contentType}\r\n`
+    + `Content-Length: ${utf8Len(body)}\r\n`
+    + 'Access-Control-Allow-Origin: *\r\n'
+    + 'Access-Control-Allow-Headers: Content-Type, X-LUCY-PIN\r\n'
+    + 'Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS\r\n'
+    + 'Cache-Control: no-store, must-revalidate\r\n'
+    + 'Connection: close\r\n\r\n'
+    + body;
+}
+const json = (status: number, obj: unknown) => httpResponse(status, 'application/json; charset=utf-8', JSON.stringify(obj));
+
+// ─── Routing ─────────────────────────────────────────────────────────────────
+async function route(req: ParsedRequest): Promise<string> {
+  if (req.method === 'OPTIONS') return httpResponse(204, 'text/plain', '');
+  if (req.method === 'GET' && req.path === '/') {
+    // Auto-refresh from the repo on page load. ALWAYS try when we've never cached the real dashboard
+    // (so a failed boot fetch never strands the user on the baked-in fallback); otherwise debounce
+    // ~15s so rapid reloads stay instant and we don't hit GitHub's rate limit.
+    if (dashboardCache === null || Date.now() - lastDashboardFetchAt > 15000) {
+      try { await fetchRemoteDashboard(); } catch { /* keep cache */ }
+    }
+    return httpResponse(200, 'text/html; charset=utf-8', dashboardCache ?? DASHBOARD_HTML);
+  }
+
+  if (req.path.startsWith('/api/')) {
+    // No auth at this stage — LAN-only, security comes later.
+    const db = await getDatabase();
+    let payload: Record<string, unknown> = {};
+    try { payload = req.body ? JSON.parse(req.body) : {}; } catch { payload = {}; }
+
+    // Dev/automation (LAN-only): report the running JS bundle, and remotely pull+apply an OTA so a
+    // shipped fix can take effect WITHOUT a manual phone restart (the app reloads itself; the server
+    // auto-restarts via shouldAutostartServer).
+    if (req.method === 'GET' && req.path === '/api/dev/version') {
+      try {
+        const Updates = await import('expo-updates');
+        return json(200, {
+          ok: true,
+          updateId: Updates.updateId ?? null,
+          createdAt: Updates.createdAt ?? null,
+          runtimeVersion: Updates.runtimeVersion ?? null,
+          channel: Updates.channel ?? null,
+          embedded: Updates.isEmbeddedLaunch ?? null,
+        });
+      } catch (e) { return json(200, { ok: false, error: e instanceof Error ? e.message : 'updates unavailable' }); }
+    }
+    if (req.method === 'POST' && req.path === '/api/dev/reload') {
+      const Updates = await import('expo-updates');
+      let fetched = false;
+      try { const r = await Updates.fetchUpdateAsync(); fetched = !!(r && (r as { isNew?: boolean }).isNew); } catch { /* offline / already current */ }
+      setTimeout(() => { void Updates.reloadAsync().catch(() => { /* ignore */ }); }, 600); // flush HTTP response first
+      return json(200, { ok: true, fetched, reloading: true });
+    }
+    if (req.method === 'GET' && req.path === '/api/memory') {
+      const { buildMemoryExport } = await import('../processing/memoryExport');
+      return json(200, await buildMemoryExport(db));
+    }
+    // Notification/insight log — for the bell view + debugging junk at its source.
+    if (req.method === 'GET' && req.path === '/api/notifications') {
+      const { listNotifLog, getNotifDiagnostics } = await import('../db/notificationLog');
+      const [items, diag] = await Promise.all([listNotifLog(db, 'all', 200), getNotifDiagnostics(db)]);
+      return json(200, { ok: true, diag, items });
+    }
+    // Voice conversations (Hey Lucy / tap-the-face) — review past chats.
+    if (req.method === 'GET' && req.path === '/api/conversations') {
+      const { listVoiceConversations } = await import('../db/voiceConversations');
+      return json(200, { ok: true, conversations: await listVoiceConversations(db, 30) });
+    }
+    // ── Health / nutrition ───────────────────────────────────────────────────
+    if (req.method === 'GET' && req.path === '/api/health') {
+      const { getHealthSummary } = await import('../processing/healthSummary');
+      return json(200, { ok: true, summary: await getHealthSummary(db) });
+    }
+    if (req.method === 'GET' && req.path === '/api/food') {
+      const { listFoodLog } = await import('../db/healthNutrition');
+      return json(200, { ok: true, items: await listFoodLog(db) });
+    }
+    // Mood-over-time graph (web parity with the app's Health mood graph). ?day=<ms> ⇒ that day's notes.
+    if (req.method === 'GET' && req.path === '/api/mood-graph') {
+      const { getMoodGraph, getDayHighlights } = await import('../processing/moodGraph');
+      const dayMs = Number(req.query.day);
+      if (Number.isFinite(dayMs) && dayMs > 0) {
+        return json(200, { ok: true, highlights: await getDayHighlights(db, dayMs) });
+      }
+      const days = Math.max(7, Math.min(90, Number(req.query.days) || 30));
+      return json(200, { ok: true, ...(await getMoodGraph(db, days)) });
+    }
+    // Money that watches itself — recurring/bills/anomaly/drift (web parity).
+    if (req.method === 'GET' && req.path === '/api/money') {
+      const { getMoneyInsights, detectRecurring, forecastUpcomingBills } = await import('../processing/moneyWatch');
+      const { listExpenses } = await import('../db/expenses');
+      const expenses = await listExpenses(db);
+      const recurring = detectRecurring(expenses);
+      return json(200, { ok: true, insights: await getMoneyInsights(db), recurring, upcoming: forecastUpcomingBills(recurring) });
+    }
+    // Savings goals (Vamsi #2) — list with pacing, create, contribute, delete (web parity).
+    if (req.method === 'GET' && req.path === '/api/money/goals') {
+      const { getGoalsWithProgress } = await import('../db/moneyGoals');
+      return json(200, { ok: true, goals: await getGoalsWithProgress(db) });
+    }
+    if (req.method === 'POST' && req.path === '/api/money/goals') {
+      const label = String(payload.label ?? '').trim();
+      const target = Number(payload.target);
+      if (!label || !Number.isFinite(target) || target <= 0) return json(400, { error: 'label and positive target required' });
+      const { createMoneyGoal } = await import('../db/moneyGoals');
+      const id = await createMoneyGoal(db, {
+        label, target,
+        currency: typeof payload.currency === 'string' ? payload.currency : undefined,
+        deadline: typeof payload.deadline === 'string' && payload.deadline ? payload.deadline : null,
+      });
+      return json(200, { ok: true, id });
+    }
+    if (req.method === 'POST' && req.path === '/api/money/goals/contribute') {
+      const goalId = Number(payload.goalId);
+      const amount = Number(payload.amount);
+      if (!goalId || !Number.isFinite(amount)) return json(400, { error: 'goalId and amount required' });
+      const { addContribution } = await import('../db/moneyGoals');
+      await addContribution(db, goalId, amount, typeof payload.note === 'string' ? payload.note : null);
+      return json(200, { ok: true });
+    }
+    if (req.method === 'DELETE' && req.path.startsWith('/api/money/goals/')) {
+      const id = Number(req.path.split('/').pop());
+      if (!id) return json(400, { error: 'Missing id' });
+      const { deleteMoneyGoal } = await import('../db/moneyGoals');
+      await deleteMoneyGoal(db, id);
+      return json(200, { ok: true });
+    }
+    // Savings-goal suggestion (auto-detected from a capture) — propose-and-confirm (web parity).
+    if (req.method === 'GET' && req.path === '/api/money/goal-suggestion') {
+      const { getGoalSignal } = await import('../processing/goalPlanner');
+      return json(200, { ok: true, suggestion: await getGoalSignal(db) });
+    }
+    if (req.method === 'POST' && req.path === '/api/money/goal-suggestion/accept') {
+      const { getGoalSignal, createGoalFromSignal } = await import('../processing/goalPlanner');
+      const sig = await getGoalSignal(db);
+      if (!sig) return json(404, { error: 'No suggestion' });
+      const id = await createGoalFromSignal(db, sig);
+      return json(200, { ok: true, id });
+    }
+    if (req.method === 'POST' && req.path === '/api/money/goal-suggestion/dismiss') {
+      const { dismissGoalSignal } = await import('../processing/goalPlanner');
+      await dismissGoalSignal(db);
+      return json(200, { ok: true });
+    }
+    // Relationship keep-warm nudges (web parity).
+    if (req.method === 'GET' && req.path === '/api/keepwarm') {
+      const { getKeepWarmNudges } = await import('../processing/relationshipEngine');
+      return json(200, { ok: true, nudges: await getKeepWarmNudges(db) });
+    }
+    // Commitment guardian — promises made + owed, with at-risk highlighting (web parity).
+    if (req.method === 'GET' && req.path === '/api/commitments') {
+      const { listOpenCommitments, listAtRiskCommitments } = await import('../db/commitments');
+      const { formatCommitmentLine } = await import('../processing/commitmentGuardian');
+      const [open, atRisk] = await Promise.all([listOpenCommitments(db), listAtRiskCommitments(db)]);
+      const atRiskIds = new Set(atRisk.map((c) => c.id));
+      const decorate = (c: import('../db/commitments').CommitmentRow) => ({
+        id: c.id, line: formatCommitmentLine(c), counterparty: c.counterparty,
+        due_at: c.due_at, direction: c.direction, atRisk: atRiskIds.has(c.id),
+      });
+      return json(200, { ok: true, commitments: open.map(decorate), atRisk: atRisk.map(decorate) });
+    }
+    if (req.method === 'POST' && req.path === '/api/commitments/resolve') {
+      const id = Number(payload.id);
+      if (!id) return json(400, { error: 'Missing id' });
+      const status = payload.status === 'dismissed' ? 'dismissed' : 'done';
+      const { markCommitment } = await import('../db/commitments');
+      await markCommitment(db, id, status);
+      return json(200, { ok: true });
+    }
+    // Scans & photos gallery — list captures that have an original source image.
+    if (req.method === 'GET' && req.path === '/api/gallery') {
+      const rows = await db.getAllAsync<{ id: number; extracted_title: string | null; created_at: string }>(
+        "SELECT id, extracted_title, created_at FROM captures WHERE source_image_path IS NOT NULL AND source_image_path != '' ORDER BY created_at DESC LIMIT 200",
+      );
+      return json(200, { ok: true, items: rows.map((r) => ({ id: r.id, title: r.extracted_title, created_at: r.created_at })) });
+    }
+    if (req.method === 'GET' && req.path.startsWith('/api/gallery/item/')) {
+      const id = Number(req.path.split('/').pop());
+      const row = id ? await db.getFirstAsync<{ source_image_path: string }>('SELECT source_image_path FROM captures WHERE id = ?', id) : null;
+      if (!row?.source_image_path) return json(404, { error: 'Not found' });
+      try {
+        const { readAsStringAsync, EncodingType } = await import('expo-file-system/legacy');
+        const b64 = await readAsStringAsync(row.source_image_path, { encoding: EncodingType.Base64 });
+        const mime = /\.png$/i.test(row.source_image_path) ? 'image/png' : 'image/jpeg';
+        return json(200, { ok: true, dataUrl: `data:${mime};base64,${b64}` });
+      } catch { return json(404, { error: 'Unreadable' }); }
+    }
+    if (req.method === 'GET' && req.path === '/api/medications') {
+      const { listMedications, parseTimes } = await import('../db/medications');
+      const meds = (await listMedications(db)).map((m) => ({ id: m.id, name: m.name, dosage: m.dosage, times: parseTimes(m.times), notes: m.notes }));
+      return json(200, { ok: true, items: meds });
+    }
+    if (req.method === 'POST' && req.path === '/api/food') {
+      const text = String(payload.text ?? '').trim();
+      if (!text) return json(400, { error: 'Empty food text' });
+      const { logFoodFromText } = await import('../processing/foodNutrition');
+      const result = await logFoodFromText(db, text, typeof payload.mealType === 'string' ? payload.mealType : null);
+      const { getHealthSummary } = await import('../processing/healthSummary');
+      return json(200, { ok: true, ...result, summary: await getHealthSummary(db) });
+    }
+    if (req.method === 'DELETE' && req.path.startsWith('/api/food/')) {
+      const id = Number(req.path.split('/').pop());
+      const { deleteFoodLog } = await import('../db/healthNutrition');
+      const done = id ? await deleteFoodLog(db, id) : false;
+      return json(done ? 200 : 404, { ok: done });
+    }
+    if (req.method === 'GET' && req.path === '/api/body-profile') {
+      const { getBodyProfile, getNutritionGoals } = await import('../db/healthNutrition');
+      return json(200, { ok: true, profile: await getBodyProfile(db), goals: await getNutritionGoals(db) });
+    }
+    if (req.method === 'POST' && req.path === '/api/body-profile') {
+      const { upsertBodyProfile } = await import('../db/healthNutrition');
+      await upsertBodyProfile(db, {
+        sex: payload.sex as 'male' | 'female' | undefined, birth_year: payload.birthYear ? Number(payload.birthYear) : undefined,
+        height_cm: payload.heightCm ? Number(payload.heightCm) : undefined, weight_kg: payload.weightKg ? Number(payload.weightKg) : undefined,
+        body_fat_pct: payload.bodyFatPct ? Number(payload.bodyFatPct) : undefined,
+        activity_level: payload.activityLevel as never, goal: payload.goal as never,
+      });
+      const { getHealthSummary } = await import('../processing/healthSummary');
+      return json(200, { ok: true, summary: await getHealthSummary(db) });
+    }
+    // Clear junk: dismiss all insights (tier>=2) or everything.
+    if (req.method === 'POST' && req.path === '/api/notifications/clear') {
+      const scope = String(payload.scope ?? 'insights');
+      const r = await db.runAsync(scope === 'all'
+        ? 'UPDATE lucy_notifications SET dismissed_at = CURRENT_TIMESTAMP WHERE dismissed_at IS NULL'
+        : 'UPDATE lucy_notifications SET dismissed_at = CURRENT_TIMESTAMP WHERE tier >= 2 AND dismissed_at IS NULL');
+      return json(200, { ok: true, cleared: r.changes });
+    }
+    if (req.method === 'POST' && req.path === '/api/capture') {
+      const text = String(payload.text ?? '').trim();
+      if (!text) return json(400, { error: 'Empty text' });
+      const { enqueueTranscript, processQueue } = await import('../processing/extract');
+      await enqueueTranscript(text, 'text');
+      void processQueue();
+      return json(200, { ok: true });
+    }
+    // Reprocess a capture — re-run extraction from scratch (clears derived data + re-queues).
+    if (req.method === 'POST' && req.path === '/api/capture/reprocess') {
+      const id = Number(payload.id);
+      if (!id) return json(400, { error: 'Missing id' });
+      const { resetCaptureForReprocess } = await import('../db/captures');
+      await resetCaptureForReprocess(db, id);
+      const { processQueue } = await import('../processing/extract');
+      void processQueue();
+      return json(200, { ok: true });
+    }
+    // Correct a capture's memory text directly, then reprocess so derived data realigns.
+    if (req.method === 'POST' && req.path === '/api/capture/correct') {
+      const id = Number(payload.id); const text = String(payload.text ?? '').trim();
+      if (!id || !text) return json(400, { error: 'Missing id/text' });
+      await db.runAsync('UPDATE captures SET raw_transcript = ? WHERE id = ?', text, id);
+      const { resetCaptureForReprocess } = await import('../db/captures');
+      await resetCaptureForReprocess(db, id);
+      const { processQueue } = await import('../processing/extract');
+      void processQueue();
+      return json(200, { ok: true });
+    }
+    if (req.method === 'POST' && req.path === '/api/task') {
+      const action = String(payload.action ?? '');
+      const todos = await import('../db/todos');
+      if (action === 'create') {
+        const task = String(payload.task ?? '').trim();
+        if (!task) return json(400, { error: 'Empty task' });
+        const urgency = ['high', 'medium', 'low'].includes(String(payload.urgency)) ? String(payload.urgency) : 'medium';
+        const category = String(payload.category ?? 'general').trim() || 'general';
+        await db.runAsync(
+          "INSERT INTO todos (task, category, urgency, context, status) VALUES (?, ?, ?, '', 'pending')",
+          task, category, urgency,
+        );
+        return json(200, { ok: true });
+      }
+      const id = Number(payload.id);
+      if (!id) return json(400, { error: 'Missing id' });
+      let done = false;
+      if (action === 'complete') done = await todos.archiveTodo(db, id, 'completed from laptop');
+      else if (action === 'delete') done = await todos.deleteTodo(db, id);
+      else if (action === 'snooze') done = (await db.runAsync("UPDATE todos SET urgency = 'low' WHERE id = ?", id)).changes > 0;
+      else return json(400, { error: 'Bad action' });
+      return json(done ? 200 : 404, { ok: done, ...(done ? {} : { error: 'No such task' }) });
+    }
+    // Ask Lucy — the full chat, from the laptop. Runs the same answer engine the app uses
+    // (memory retrieval + shielded LLM), so answers are grounded in on-device memory.
+    if (req.method === 'POST' && req.path === '/api/ask') {
+      const question = String(payload.question ?? '').trim();
+      if (!question) return json(400, { error: 'Empty question' });
+      const rawHistory = Array.isArray(payload.history) ? payload.history : [];
+      const history = rawHistory
+        .filter((t): t is { role: string; content: string } => !!t && typeof t === 'object')
+        .map((t) => ({ role: t.role === 'lucy' ? 'lucy' as const : 'user' as const, content: String(t.content ?? '') }))
+        .filter((t) => t.content)
+        .slice(-12);
+      const { askLucy } = await import('../processing/ask');
+      const capture = async (text: string): Promise<void> => {
+        const { enqueueTranscript, processQueue } = await import('../processing/extract');
+        await enqueueTranscript(text, 'text'); void processQueue();
+      };
+      const answer = await askLucy(question, capture, history);
+      // Prefer the LLM prose; fall back to the structured message.
+      const reply = (answer.llmResponse && answer.llmResponse.trim()) || answer.message || answer.title || '…';
+      return json(200, {
+        ok: true,
+        reply,
+        kind: answer.answerKind ?? 'llm',
+        title: answer.title,
+        tasks: answer.tasks ?? [],
+        sources: answer.sources ?? [],
+        expenses: answer.expenses ?? [],
+        expenseTotal: answer.expenseTotal,
+        spendingCategories: answer.spendingCategories ?? [],
+        scheduleSuggestions: answer.scheduleSuggestions ?? [],
+        recordedSignal: answer.recordedSignal ?? '',
+      });
+    }
+    // Shadow-diff: run the LEGACY answer path and the SEMANTIC ROUTER on the same question and return
+    // both, so the new tool routing can be compared before flipping the default on (P2 dogfooding).
+    if (req.method === 'POST' && req.path === '/api/ask-compare') {
+      const question = String(payload.question ?? '').trim();
+      if (!question) return json(400, { error: 'Empty question' });
+      const { askLucy } = await import('../processing/ask');
+      const { runSemanticRouter } = await import('../processing/tools');
+      const [legacy, routed] = await Promise.all([
+        askLucy(question, undefined, [], undefined, { bypassRouter: true }),
+        runSemanticRouter(db, question).catch(() => null),
+      ]);
+      return json(200, {
+        ok: true, question,
+        legacy: { kind: legacy.answerKind, reply: (legacy.llmResponse || legacy.message || legacy.title || '').slice(0, 1200) },
+        router: routed ? { tools: routed.recordedSignal, reply: (routed.llmResponse || routed.message || '').slice(0, 1200) } : null,
+      });
+    }
+    // Log a mood entry from the laptop.
+    if (req.method === 'POST' && req.path === '/api/mood') {
+      const tone = ['positive', 'neutral', 'low', 'negative'].includes(String(payload.tone)) ? String(payload.tone) : 'neutral';
+      const energy = ['high', 'medium', 'low'].includes(String(payload.energy)) ? String(payload.energy) : 'medium';
+      await db.runAsync('INSERT INTO mood_entries (tone, energy) VALUES (?, ?)', tone, energy);
+      return json(200, { ok: true });
+    }
+    // Tell LUCY something directly — stored as a confirmed learned fact (feedback channel).
+    if (req.method === 'POST' && req.path === '/api/feedback') {
+      const text = String(payload.text ?? '').trim();
+      if (!text) return json(400, { error: 'Empty feedback' });
+      const category = ['preference', 'habit', 'trait', 'routine', 'goal', 'relationship', 'correction'].includes(String(payload.category))
+        ? String(payload.category) : 'preference';
+      const { upsertLearnedFact } = await import('../db/learnedProfile');
+      await upsertLearnedFact(db, category as never, text, 'feedback');
+      return json(200, { ok: true });
+    }
+    // Upload an image into the Document Vault. The browser sends a downscaled JPEG (full)
+    // + a small thumbnail as base64 data URLs; we write the full image to a temp file and
+    // hand it to the vault (classifies into a bucket, persists to the app sandbox, optionally
+    // copies to Photos, enqueues a capture). Base64-in-JSON keeps it text-safe over the socket.
+    if (req.method === 'POST' && req.path === '/api/upload') {
+      const dataUrl = String(payload.image ?? '');
+      const b64 = dataUrl.includes(',') ? dataUrl.slice(dataUrl.indexOf(',') + 1) : dataUrl;
+      if (!b64) return json(400, { error: 'No image' });
+      const name = String(payload.name ?? 'upload.jpg');
+      const thumb = typeof payload.thumb === 'string' ? payload.thumb : null;
+      const hash = typeof payload.hash === 'string' ? payload.hash : null;
+      const saveToGallery = payload.gallery !== false; // default: also save to Photos
+      // The ORIGINAL file (e.g. real PDF) for full-fidelity view + native-format download.
+      const origRaw = typeof payload.orig === 'string' ? payload.orig : '';
+      const origB64 = origRaw.includes(',') ? origRaw.slice(origRaw.indexOf(',') + 1) : origRaw;
+      const origMime = typeof payload.origMime === 'string' ? payload.origMime : 'application/octet-stream';
+      const original = origB64 ? { base64: origB64, mime: origMime } : null;
+      try {
+        const fs = await import('expo-file-system/legacy');
+        const path = `${fs.cacheDirectory}lucy-upload-${Date.now()}.jpg`;
+        await fs.writeAsStringAsync(path, b64, { encoding: fs.EncodingType.Base64 });
+        const { saveImageToVault } = await import('../processing/documentVault');
+        const r = await saveImageToVault(path, name, thumb, saveToGallery, hash, original);
+        if (r.duplicate) return json(200, { ok: true, duplicate: true, existing: r.existing });
+        const item = r.item;
+        return json(200, { ok: !!item, id: item?.id, title: item?.title, bucket: item?.bucket, description: item?.description });
+      } catch (e) {
+        return json(500, { error: e instanceof Error ? e.message : 'Upload failed' });
+      }
+    }
+    if (req.method === 'GET' && req.path === '/api/vault') {
+      const { listVaultItems } = await import('../processing/documentVault');
+      const items = await listVaultItems(db);
+      // Return list metadata + thumbnails (small); never the full images here.
+      return json(200, { items: items.map((i) => ({ id: i.id, title: i.title, description: i.description, bucket: i.bucket, keywords: i.keywords, thumb: i.thumb, gallery_saved: i.gallery_saved, created_at: i.created_at })) });
+    }
+    // Re-run classification on one stored document (dynamic buckets + keywords).
+    if (req.method === 'POST' && req.path === '/api/vault/reclassify') {
+      const id = Number(payload.id);
+      if (!id) return json(400, { error: 'Missing id' });
+      const { reclassifyVaultItem } = await import('../processing/documentVault');
+      const ok = await reclassifyVaultItem(db, id);
+      return json(200, { ok });
+    }
+    if (req.method === 'GET' && req.path.startsWith('/api/vault/item/')) {
+      const id = Number(req.path.split('/').pop());
+      const { getVaultImage } = await import('../processing/documentVault');
+      const dataUrl = id ? await getVaultImage(db, id) : null;
+      return dataUrl ? json(200, { ok: true, dataUrl }) : json(404, { error: 'Not found' });
+    }
+    // Original file (real PDF / full-res image) for download in its native format.
+    if (req.method === 'GET' && req.path.startsWith('/api/vault/orig/')) {
+      const id = Number(req.path.split('/').pop());
+      const { getVaultOriginal } = await import('../processing/documentVault');
+      const r = id ? await getVaultOriginal(db, id) : null;
+      return r ? json(200, { ok: true, dataUrl: r.dataUrl, mime: r.mime, name: r.name }) : json(404, { error: 'Not found' });
+    }
+    if (req.method === 'POST' && req.path === '/api/vault/refile') {
+      const id = Number(payload.id); const bucket = String(payload.bucket ?? '');
+      if (!id || !bucket) return json(400, { error: 'Missing id/bucket' });
+      const { refileVaultItem } = await import('../processing/documentVault');
+      await refileVaultItem(db, id, bucket);
+      return json(200, { ok: true });
+    }
+    if (req.method === 'DELETE' && req.path.startsWith('/api/vault/')) {
+      const id = Number(req.path.split('/').pop());
+      if (!id) return json(400, { error: 'Missing id' });
+      const { deleteVaultItem } = await import('../processing/documentVault');
+      const done = await deleteVaultItem(db, id);
+      return json(done ? 200 : 404, { ok: done, ...(done ? {} : { error: 'No such document' }) });
+    }
+    // Edit the "about you" profile blurb from the laptop.
+    if (req.method === 'POST' && req.path === '/api/profile') {
+      const { setSetting } = await import('../db/settings');
+      if (typeof payload.about === 'string') await setSetting(db, 'user_profile_about', String(payload.about).trim());
+      if (typeof payload.name === 'string' && String(payload.name).trim()) await setSetting(db, 'user_profile_name', String(payload.name).trim());
+      return json(200, { ok: true });
+    }
+    if (req.method === 'POST' && req.path === '/api/reflect') {
+      const { reflectOnUser } = await import('../processing/reflectOnUser');
+      const count = await reflectOnUser(db, true);
+      return json(200, { ok: true, learned: count });
+    }
+    // Import a memory export JSON (device switch / restore) from the laptop.
+    if (req.method === 'POST' && req.path === '/api/import') {
+      const data = payload.data ?? payload; // accept {data:{...}} or the raw export
+      const { importMemoryExport } = await import('../processing/memoryImport');
+      const result = await importMemoryExport(db, data);
+      return json(result.ok ? 200 : 400, result);
+    }
+    // Dev logs (incl. crashes) — for diagnosing field issues over the LAN.
+    if (req.method === 'GET' && req.path === '/api/logs') {
+      const { listDevLogs } = await import('../db/devLog');
+      const rows = await listDevLogs(db, 100);
+      const onlyCrash = req.query.crash === '1';
+      return json(200, { logs: onlyCrash ? rows.filter((r) => r.category === 'crash' || r.error) : rows });
+    }
+    // Cost guard status + temporary snooze (for bulk uploads/reclassify from the laptop).
+    if (req.method === 'GET' && req.path === '/api/costguard') {
+      const { getCostGuard } = await import('../ai/rateLimit');
+      return json(200, await getCostGuard(db));
+    }
+    if (req.method === 'POST' && req.path === '/api/costguard') {
+      const minutes = Number(payload.minutes ?? 0);
+      const { snoozeCostGuard, getCostGuard } = await import('../ai/rateLimit');
+      await snoozeCostGuard(db, minutes);
+      // Resuming the queue: kick the processor in case it was paused by the cap.
+      if (minutes > 0) { const { processQueue } = await import('../processing/extract'); void processQueue(); }
+      return json(200, await getCostGuard(db));
+    }
+    // Hot-reload the dashboard from the repo — lets UAT refresh the website with no app rebuild.
+    if (req.method === 'POST' && req.path === '/api/dashboard/refresh') {
+      const bytes = await fetchRemoteDashboard();
+      return json(200, { ok: bytes > 0, bytes, served: dashboardCache ? 'remote' : 'baked-in' });
+    }
+    if (req.method === 'DELETE' && req.path.startsWith('/api/capture/')) {
+      const id = Number(req.path.split('/').pop());
+      if (!id) return json(400, { error: 'Missing id' });
+      const { deleteCaptureCompletely, hardDeleteCapture } = await import('../db/captures');
+      let done = false;
+      if (req.query.hard === '1') {
+        done = await hardDeleteCapture(db, id);
+      } else done = await deleteCaptureCompletely(db, id);
+      return json(done ? 200 : 404, { ok: done, ...(done ? {} : { error: 'No such capture' }) });
+    }
+    // One-shot data cleanup + graph rebuild (junk people, stale open loops). For maintenance.
+    if (req.method === 'POST' && req.path === '/api/cleanup') {
+      const { cleanupJunkPeople } = await import('../db/people');
+      const { decayStaleOpenLoops } = await import('../db/openLoops');
+      const { dedupLearnedFacts } = await import('../db/learnedProfile');
+      const { recategorizeExpenses } = await import('../db/expenses');
+      const { cleanupJunkTodos, recategorizeAllTodos } = await import('../db/todos');
+      const peopleRemoved = await cleanupJunkPeople(db);
+      const loopsResolved = await decayStaleOpenLoops(db, Number(payload.loopDays) || 30);
+      const factsMerged = await dedupLearnedFacts(db);
+      const expensesFixed = await recategorizeExpenses(db);
+      const todosArchived = await cleanupJunkTodos(db);
+      const todosRecategorized = await recategorizeAllTodos(db);
+      const { dedupScheduledBlocks } = await import('../scheduling');
+      const duplicateBlocksRemoved = await dedupScheduledBlocks(db);
+      const { dedupInsightNotifications } = await import('../db/notificationLog');
+      const duplicateInsightsRemoved = await dedupInsightNotifications(db);
+      const { organizeMemory } = await import('../processing/organizer');
+      await organizeMemory(db, 'manual');
+      return json(200, { ok: true, peopleRemoved, loopsResolved, factsMerged, expensesFixed, todosArchived, todosRecategorized, duplicateBlocksRemoved, duplicateInsightsRemoved });
+    }
+    if (req.method === 'DELETE' && req.path.startsWith('/api/fact/')) {
+      const id = Number(req.path.split('/').pop());
+      if (!id) return json(400, { error: 'Missing id' });
+      const { deleteLearnedFact } = await import('../db/learnedProfile');
+      const done = await deleteLearnedFact(db, id);
+      return json(done ? 200 : 404, { ok: done, ...(done ? {} : { error: 'No such fact' }) });
+    }
+
+    // ─── Resources / Links (Productivity → Links) ─────────────────────────────
+    if (req.method === 'GET' && req.path === '/api/resources') {
+      const rows = await db.getAllAsync(
+        'SELECT id, url, title, platform, topic, thumbnail, created_at FROM online_resources ORDER BY created_at DESC',
+      );
+      return json(200, { ok: true, items: rows });
+    }
+
+    // ─── Reminders ─────────────────────────────────────────────────────────────
+    if (req.method === 'DELETE' && req.path.startsWith('/api/reminder/')) {
+      const id = Number(req.path.split('/').pop());
+      if (!id) return json(400, { error: 'Missing id' });
+      const { archiveReminder } = await import('../db/reminders');
+      const done = await archiveReminder(db, id, 'removed from Workspace');
+      if (done) { const { cancelNag } = await import('../processing/persistentReminders'); await cancelNag(`rem-${id}`); }
+      return json(done ? 200 : 404, { ok: done, ...(done ? {} : { error: 'No such reminder' }) });
+    }
+
+    // ─── Guide / manual (What is LUCY? · Features · Detailed manual) ───────────
+    if (req.method === 'GET' && req.path === '/api/guide') {
+      const { manualSections } = await import('../voice/appManual');
+      return json(200, { ok: true, sections: manualSections() });
+    }
+
+    // ─── Voice command ("Hey Lucy, …") ────────────────────────────────────────
+    if (req.method === 'POST' && req.path === '/api/voice') {
+      const text = String(payload.text ?? '').trim();
+      if (!text) return json(400, { error: 'Empty command' });
+      const { runVoiceCommand } = await import('../voice/commandRouter');
+      const r = await runVoiceCommand(text, db, typeof payload.context === 'string' ? payload.context : undefined);
+      return json(200, r);
+    }
+
+    // ─── Workspace home (live-tile dashboard summary) ─────────────────────────
+    if (req.method === 'GET' && req.path === '/api/workspace') {
+      const now = Date.now();
+      const ds = new Date(); ds.setHours(0, 0, 0, 0); const dayStart = ds.getTime(); const dayEnd = dayStart + 86400000;
+      const docs = await db.getFirstAsync<{ n: number; b: number }>('SELECT COUNT(*) n, COUNT(DISTINCT bucket) b FROM vault_items');
+      const res = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) n FROM online_resources');
+      const proj = await db.getFirstAsync<{ n: number }>("SELECT COUNT(*) n FROM projects WHERE status != 'archived'");
+      const cal = await db.getAllAsync<{ title: string; start_at: number }>(
+        "SELECT title, start_at FROM scheduled_blocks WHERE status = 'committed' AND start_at >= ? AND start_at < ? ORDER BY start_at", dayStart, dayEnd,
+      );
+      const nextBlock = cal.find((b) => b.start_at >= now) || cal[0];
+      const { unscheduledPendingTodos } = await import('../scheduling');
+      const uns = await unscheduledPendingTodos(db);
+      const t = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      return json(200, {
+        ok: true,
+        tiles: {
+          calendar: { count: cal.length, status: nextBlock ? `Next: ${nextBlock.title} · ${t(nextBlock.start_at)}` : 'Nothing today — plan it' },
+          documents: { count: docs?.n ?? 0, status: `${docs?.b ?? 0} categories` },
+          resources: { count: res?.n ?? 0, status: (res?.n ?? 0) ? 'links saved' : 'Add your first link' },
+          projects: { count: proj?.n ?? 0, status: (proj?.n ?? 0) ? `${proj?.n} active` : 'Start a project' },
+          reminders: await (async () => {
+            const rr = await db.getAllAsync<{ remind_at: string | null }>("SELECT remind_at FROM reminders WHERE status = 'pending'");
+            const next = rr.map((r) => r.remind_at).filter(Boolean).map((s) => Date.parse(s as string)).filter((n) => Number.isFinite(n) && n >= now).sort((a, b) => a - b)[0];
+            return { count: rr.length, status: next ? `Next: ${t(next)}` : (rr.length ? 'no time set' : 'All clear') };
+          })(),
+          bookmarks: { count: 0, status: 'Coming soon' },
+          suggested: { count: uns.length, status: uns.length ? `${uns.length} task${uns.length === 1 ? '' : 's'} need a time` : 'All caught up' },
+        },
+      });
+    }
+
+    // ─── Projects (Workspace → Projects) ──────────────────────────────────────
+    if (req.method === 'GET' && req.path === '/api/projects') {
+      const { listProjects } = await import('../db/projects');
+      return json(200, { ok: true, items: await listProjects(db) });
+    }
+    if (req.method === 'POST' && req.path === '/api/projects') {
+      const name = String(payload.name ?? '').trim();
+      if (!name) return json(400, { error: 'Name required' });
+      const { createProject } = await import('../db/projects');
+      const id = await createProject(db, name, typeof payload.description === 'string' ? payload.description : null);
+      return json(200, { ok: true, id });
+    }
+    if (req.method === 'DELETE' && req.path.startsWith('/api/projects/')) {
+      const id = Number(req.path.split('/').pop());
+      if (!id) return json(400, { error: 'Missing id' });
+      const { deleteProject } = await import('../db/projects');
+      const done = await deleteProject(db, id);
+      return json(done ? 200 : 404, { ok: done, ...(done ? {} : { error: 'No such project' }) });
+    }
+    // Trip co-pilot — the pending offer + confirm/dismiss (web parity; mirrors the in-app ProjectsTab).
+    if (req.method === 'GET' && req.path === '/api/trip/signal') {
+      const { getTripSignal } = await import('../processing/tripPlanner');
+      return json(200, { ok: true, signal: await getTripSignal(db) });
+    }
+    if (req.method === 'POST' && req.path === '/api/trip/plan') {
+      const { getTripSignal, createTripPlan } = await import('../processing/tripPlanner');
+      const signal = await getTripSignal(db);
+      if (!signal) return json(400, { error: 'No trip offer to plan' });
+      return json(200, { ok: true, plan: await createTripPlan(db, signal) });
+    }
+    if (req.method === 'POST' && req.path === '/api/trip/dismiss') {
+      const { dismissTripSignal } = await import('../processing/tripPlanner');
+      await dismissTripSignal(db);
+      return json(200, { ok: true });
+    }
+    // Project autopilot — suggestions LUCY noticed, plus merge-into-existing (web parity).
+    if (req.method === 'GET' && req.path === '/api/projects/suggestions') {
+      const { deriveProjectSuggestions } = await import('../processing/projectAutopilot');
+      return json(200, { ok: true, suggestions: await deriveProjectSuggestions(db) });
+    }
+    if (req.method === 'POST' && req.path === '/api/projects/merge') {
+      const projectId = Number(payload.projectId);
+      const suggestion = String(payload.suggestion ?? '').trim();
+      if (!projectId || !suggestion) return json(400, { error: 'projectId and suggestion required' });
+      const { mergeSuggestionIntoProject } = await import('../processing/projectAutopilot');
+      await mergeSuggestionIntoProject(db, projectId, suggestion);
+      return json(200, { ok: true });
+    }
+    if (req.method === 'POST' && req.path === '/api/projects/dismiss-suggestion') {
+      const name = String(payload.name ?? '').trim();
+      if (!name) return json(400, { error: 'name required' });
+      const { dismissProjectSuggestion } = await import('../processing/projectAutopilot');
+      await dismissProjectSuggestion(db, name);
+      return json(200, { ok: true });
+    }
+    if (req.method === 'POST' && req.path === '/api/projects/update') {
+      const id = Number(payload.id);
+      const name = String(payload.name ?? '').trim();
+      if (!id || !name) return json(400, { error: 'id and name required' });
+      const { renameProject } = await import('../db/projects');
+      await renameProject(db, id, name, typeof payload.description === 'string' ? payload.description : undefined);
+      return json(200, { ok: true });
+    }
+    // Explicitly pin/unpin a task to a project (projectId null = unpin → back to name-match gathering).
+    if (req.method === 'POST' && req.path === '/api/projects/assign') {
+      const todoId = Number(payload.todoId);
+      if (!todoId) return json(400, { error: 'todoId required' });
+      const projectId = payload.projectId == null ? null : Number(payload.projectId);
+      const { assignTodoToProject } = await import('../db/projects');
+      await assignTodoToProject(db, todoId, projectId);
+      return json(200, { ok: true });
+    }
+
+    // ─── Intelligent Calendar ─────────────────────────────────────────────────
+    if (req.method === 'GET' && req.path === '/api/schedule/availability') {
+      const { getAvailability } = await import('../scheduling/availability');
+      const { suggestedEnergyCurves } = await import('../scheduling/load');
+      const availability = await getAvailability(db);
+      // Seed for the web energy editor when the user hasn't shaped their own curves yet.
+      return json(200, { ok: true, availability, suggestedCurves: suggestedEnergyCurves(availability) });
+    }
+    if (req.method === 'POST' && req.path === '/api/schedule/availability') {
+      const { setAvailability } = await import('../scheduling/availability');
+      const av = await setAvailability(db, (payload.profile ?? payload) as Record<string, unknown>);
+      return json(200, { ok: true, availability: av });
+    }
+    if (req.method === 'POST' && req.path === '/api/schedule/suggest') {
+      const { suggestForText, suggestForTodo, describeResources } = await import('../scheduling');
+      const r = payload.todoId
+        ? await suggestForTodo(db, Number(payload.todoId))
+        : await suggestForText(db, String(payload.task ?? ''), {
+            durationMin: payload.durationMin ? Number(payload.durationMin) : undefined,
+            deadline: typeof payload.deadline === 'string' ? payload.deadline : null,
+          });
+      if (!r) return json(400, { error: 'Nothing to schedule' });
+      return json(200, {
+        ok: true,
+        meta: { ...r.meta, resourceLabel: describeResources(r.meta.resources) },
+        suggestions: r.suggestions,
+      });
+    }
+    if (req.method === 'POST' && req.path === '/api/schedule/commit') {
+      const { commitBlock } = await import('../scheduling');
+      const r = await commitBlock(db, {
+        title: String(payload.title ?? 'Task'),
+        startMs: Number(payload.startMs), endMs: Number(payload.endMs),
+        resources: payload.resources as undefined,
+        energy: typeof payload.energy === 'string' ? payload.energy : null,
+        location: typeof payload.location === 'string' ? payload.location : null,
+        todoId: payload.todoId ? Number(payload.todoId) : null,
+      });
+      return json(r.ok ? 200 : 409, r);
+    }
+    if (req.method === 'POST' && req.path === '/api/schedule/commit-series') {
+      const { commitSeries } = await import('../scheduling');
+      const rec = ['daily', 'weekdays', 'weekly'].includes(String(payload.recurrence)) ? String(payload.recurrence) as 'daily' | 'weekdays' | 'weekly' : 'daily';
+      const r = await commitSeries(db, {
+        title: String(payload.title ?? 'Task'), startMs: Number(payload.startMs), endMs: Number(payload.endMs),
+        resources: payload.resources as undefined, energy: typeof payload.energy === 'string' ? payload.energy : null,
+        location: typeof payload.location === 'string' ? payload.location : null, todoId: payload.todoId ? Number(payload.todoId) : null,
+      }, rec);
+      return json(200, { ok: true, ...r });
+    }
+    if (req.method === 'POST' && req.path === '/api/schedule/plan-day') {
+      const { autoPlanDay } = await import('../scheduling');
+      const r = await autoPlanDay(db, { horizonDays: Number(payload.horizonDays) || 2 });
+      return json(200, { ok: true, ...r });
+    }
+    if (req.method === 'POST' && req.path === '/api/schedule/block') {
+      const { addFixedBlock } = await import('../scheduling');
+      const r = await addFixedBlock(db, {
+        title: String(payload.title ?? 'Busy'),
+        startMs: Number(payload.startMs), endMs: Number(payload.endMs),
+        parallelizable: payload.parallelizable === true,
+        location: typeof payload.location === 'string' ? payload.location : null,
+      });
+      return json(200, r);
+    }
+    if (req.method === 'GET' && req.path === '/api/schedule') {
+      const days = Math.max(1, Math.min(45, Number(req.query.days) || 2));
+      const { getPlan, describeResources, unscheduledPendingTodos } = await import('../scheduling');
+      const { getAvailability } = await import('../scheduling/availability');
+      const now = Date.now();
+      const plan = await getPlan(db, now - 2 * 60 * 60 * 1000, now + days * 24 * 60 * 60 * 1000);
+      const availability = await getAvailability(db);
+      const unscheduled = await unscheduledPendingTodos(db);
+      return json(200, {
+        ok: true,
+        availability,
+        blocks: plan.blocks.map((b) => ({
+          id: b.id ?? null, title: b.title, start: b.start, end: b.end,
+          source: b.source, todoId: b.todoId ?? null, locked: !!b.locked,
+          resourceLabel: describeResources(b.resources),
+        })),
+        conflicts: plan.conflicts.map((c) => ({ a: c.a.title, b: c.b.title, reason: c.reason })),
+        unscheduled: unscheduled.slice(0, 12),
+      });
+    }
+    if (req.method === 'POST' && req.path === '/api/schedule/rearrange') {
+      const { classifyTask, suggestRearrangement, describeResources } = await import('../scheduling');
+      const meta = classifyTask(String(payload.task ?? ''), { durationMin: payload.durationMin ? Number(payload.durationMin) : undefined });
+      const proposal = await suggestRearrangement(db, meta);
+      return json(200, { ok: true, proposal, meta: { ...meta, resourceLabel: describeResources(meta.resources) } });
+    }
+    if (req.method === 'POST' && req.path === '/api/schedule/rearrange/apply') {
+      const { applyRearrangement } = await import('../scheduling');
+      const moves = Array.isArray(payload.moves) ? payload.moves.map((m: { blockId: number; to: number }) => ({ blockId: Number(m.blockId), to: Number(m.to) })) : [];
+      const r = await applyRearrangement(db, {
+        title: String(payload.title ?? 'Task'), startMs: Number(payload.startMs), endMs: Number(payload.endMs),
+        resources: payload.resources as undefined, energy: typeof payload.energy === 'string' ? payload.energy : null,
+        location: typeof payload.location === 'string' ? payload.location : null, todoId: payload.todoId ? Number(payload.todoId) : null,
+      }, moves);
+      return json(200, r);
+    }
+    if (req.method === 'POST' && req.path === '/api/schedule/update') {
+      const id = Number(payload.id);
+      if (!id) return json(400, { error: 'Missing id' });
+      const { updateScheduledBlock } = await import('../db/schedule');
+      const done = await updateScheduledBlock(db, id, {
+        title: typeof payload.title === 'string' ? payload.title : undefined,
+        startMs: payload.startMs != null ? Number(payload.startMs) : undefined,
+        endMs: payload.endMs != null ? Number(payload.endMs) : undefined,
+      });
+      if (done) { const { rescheduleBlockNag } = await import('../scheduling'); await rescheduleBlockNag(db, id); }
+      return json(done ? 200 : 404, { ok: done, ...(done ? {} : { error: 'No such event' }) });
+    }
+    if (req.method === 'POST' && req.path === '/api/schedule/move') {
+      const { moveScheduledBlockTo } = await import('../scheduling');
+      const r = await moveScheduledBlockTo(db, Number(payload.id), Number(payload.startMs));
+      return json(r.ok ? 200 : 400, r);
+    }
+    if (req.method === 'DELETE' && req.path.startsWith('/api/schedule/')) {
+      const id = Number(req.path.split('/').pop());
+      const { cancelBlock } = await import('../scheduling');
+      const okc = id ? await cancelBlock(db, id) : false;
+      return json(200, { ok: okc });
+    }
+
+    return json(404, { error: 'No such endpoint' });
+  }
+  return httpResponse(404, 'text/plain', 'Not found');
+}
+
+// ─── Server lifecycle ──────────────────────────────────────────────────────────
+export async function startServer(): Promise<ServerState> {
+  if (state.running) return state;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const TcpSocket = require('react-native-tcp-socket').default ?? require('react-native-tcp-socket');
+    let ip: string | null = null;
+    try { ip = await Network.getIpAddressAsync(); } catch { /* ignore */ }
+
+    server = TcpSocket.createServer((socket: { on: (e: string, cb: (d?: unknown) => void) => void; write: (s: string, enc?: string, cb?: (e?: unknown) => void) => boolean; end: (s?: string) => void; destroy: () => void }) => {
+      let buffer = '';
+      const send = (res: string) => {
+        // The OS socket buffer is ~64KB, so writing a big payload and IMMEDIATELY calling end()
+        // truncates it — the FIN closes the connection before the buffer drains. That silently broke
+        // the web dashboard's data load + the memory export on slower devices (client got an
+        // IncompleteRead). Fix: write in 16KB chunks, waiting for each to flush (write callback)
+        // before the next, and only FIN after the last chunk. Respects backpressure for any size and
+        // keeps each cross-bridge write small.
+        const CHUNK = 16384;
+        let i = 0;
+        const writeNext = () => {
+          if (i >= res.length) { try { socket.end(); } catch { /* ignore */ } return; }
+          const piece = res.slice(i, i + CHUNK);
+          i += CHUNK;
+          try { socket.write(piece, 'utf8', writeNext); }
+          catch { try { socket.destroy(); } catch { /* ignore */ } }
+        };
+        writeNext();
+      };
+      socket.on('data', (data?: unknown) => {
+        buffer += typeof data === 'string' ? data : String(data);
+        const req = parseRequest(buffer);
+        if (!req) return; // wait for the rest
+        buffer = '';
+        void route(req)
+          .then((res) => send(res))
+          .catch(() => send(json(500, { error: 'Server error' })));
+      });
+      socket.on('error', () => { try { socket.destroy(); } catch { /* ignore */ } });
+    });
+    server?.listen?.({ port: PORT, host: '0.0.0.0' });
+    server?.on?.('error', (e: unknown) => setState({ error: e instanceof Error ? e.message : 'Server error', running: false }));
+
+    setState({ running: true, ip, pin: null, error: null });
+    void persistServerAutostart(true); // remember so the server auto-restarts after an OTA reload / reboot
+    void fetchRemoteDashboard(); // pull the latest dashboard in the background
+    return state;
+  } catch (e) {
+    setState({ running: false, error: e instanceof Error ? e.message : 'Could not start server' });
+    return state;
+  }
+}
+
+/**
+ * Re-reads the phone's current IP and updates the displayed address. On office/DHCP networks the IP
+ * can change while the server is running (it's bound to 0.0.0.0 so it still works on the new IP) — but
+ * the Settings screen would otherwise keep showing the stale address the user can no longer reach.
+ */
+export async function refreshServerIp(): Promise<void> {
+  if (!state.running) return;
+  try {
+    const ip = await Network.getIpAddressAsync();
+    if (ip && ip !== state.ip) setState({ ip });
+  } catch { /* ignore */ }
+}
+
+export function stopServer(): void {
+  try { server?.close(); } catch { /* ignore */ }
+  server = null;
+  setState({ running: false, pin: null, error: null });
+  void persistServerAutostart(false);
+}
+
+const AUTOSTART_KEY = 'lan_server_autostart';
+async function persistServerAutostart(on: boolean): Promise<void> {
+  try {
+    const db = await getDatabase();
+    const { setSetting } = await import('../db/settings');
+    await setSetting(db, AUTOSTART_KEY, on ? '1' : '0');
+  } catch { /* non-critical */ }
+}
+
+/** Whether to auto-start the LAN dashboard server on app boot. ON BY DEFAULT (user opted into an
+ *  always-on test rig); only an explicit toggle-OFF (flag '0') disables it. Survives OTA reloads
+ *  (incl. /api/dev/reload) and reboots, keeping the dashboard reachable unattended. */
+export async function shouldAutostartServer(): Promise<boolean> {
+  try {
+    const db = await getDatabase();
+    const { getSetting } = await import('../db/settings');
+    return (await getSetting(db, AUTOSTART_KEY)) !== '0';
+  } catch { return true; }
+}

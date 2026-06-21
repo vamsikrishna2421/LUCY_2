@@ -1,0 +1,33 @@
+export const config = {
+  remoteProvider: 'openai' as const,
+  aiMode: (process.env.EXPO_PUBLIC_AI_MODE ?? 'hybrid') as 'hybrid' | 'offline',
+  localInference: (process.env.EXPO_PUBLIC_LOCAL_INFERENCE === 'ollama-dev' ? 'ollama-dev' : 'device') as 'device' | 'ollama-dev',
+  deviceModelTier: (process.env.EXPO_PUBLIC_DEVICE_MODEL_TIER === 'balanced' ? 'balanced' : 'fast') as 'fast' | 'balanced',
+  // Development-only asset relay; model inference still executes on the phone.
+  deviceModelAssetBaseUrl: (process.env.EXPO_PUBLIC_DEVICE_MODEL_ASSET_BASE_URL ?? '').replace(/\/$/, ''),
+  allowExternalAI: process.env.EXPO_PUBLIC_ALLOW_EXTERNAL_AI === 'true',
+  openAIModel: process.env.EXPO_PUBLIC_OPENAI_MODEL ?? 'gpt-4o-mini',
+  openAISummaryModel: process.env.EXPO_PUBLIC_OPENAI_SUMMARY_MODEL ?? 'gpt-4o-mini',
+  claudeExtractionModel: process.env.EXPO_PUBLIC_CLAUDE_EXTRACTION_MODEL ?? 'claude-haiku-4-5-20251001',
+  claudeSummaryModel: process.env.EXPO_PUBLIC_CLAUDE_SUMMARY_MODEL ?? 'claude-sonnet-4-6',
+  tier1IntervalMinutes: 5,
+  tier2IntervalMinutes: 120,
+  tier3Time: '22:00',
+  // iOS clamps BGTaskScheduler to ~15 min minimum and still runs it opportunistically; 15 gives the
+  // OS the earliest chance rather than forcing a 2-hour floor. Foreground captures process immediately.
+  backgroundProcessingIntervalMinutes: 15,
+  defaultIdeaPrivacy: 'private' as const,
+  defaultExpensePrivacy: 'normal' as const,
+  defaultTodoPrivacy: 'normal' as const,
+  obsidianSyncEnabled: false,
+  syncPrivateItems: false,
+  acrHost: process.env.EXPO_PUBLIC_ACR_HOST ?? '',
+  acrAccessKey: process.env.EXPO_PUBLIC_ACR_ACCESS_KEY ?? '',
+  acrAccessSecret: process.env.EXPO_PUBLIC_ACR_ACCESS_SECRET ?? '',
+  passiveListenBatchMinutes: 10,
+  passiveMusicSampleIntervalMinutes: 2,
+  passiveMusicSampleDurationSeconds: 15,
+  // Used only when EXPO_PUBLIC_LOCAL_INFERENCE=ollama-dev for emulator development.
+  ollamaBaseUrl: process.env.EXPO_PUBLIC_OLLAMA_BASE_URL ?? 'http://localhost:11434',
+  ollamaModel: process.env.EXPO_PUBLIC_OLLAMA_MODEL ?? 'phi3',
+};

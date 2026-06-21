@@ -1,0 +1,1170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LUCY — Your Private AI Second Brain</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { font-family: 'Inter', -apple-system, sans-serif; background: #0F0E0B; color: #F5EFE6; }
+
+  /* NAV */
+  nav {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 60px; position: sticky; top: 0; z-index: 100;
+    background: rgba(15,14,11,0.92); backdrop-filter: blur(16px);
+    border-bottom: 1px solid #2D2218;
+  }
+  .nav-logo { font-size: 22px; font-weight: 900; letter-spacing: 2px; display:flex; align-items:center; gap:10px; }
+  .nav-logo span { color: #FF8C42; }
+  .nav-logo img { width:32px; height:32px; border-radius:8px; }
+  .nav-links { display: flex; gap: 32px; align-items: center; }
+  .nav-links a { color: #8A7560; font-size: 13px; font-weight: 600; text-decoration: none; letter-spacing: 0.3px; transition: color 0.2s; }
+  .nav-links a:hover { color: #F5EFE6; }
+  .nav-badge {
+    background: rgba(255,140,66,0.12); border: 1px solid rgba(255,140,66,0.3);
+    color: #FFA05C; font-size: 11px; font-weight: 700; letter-spacing: 1px;
+    padding: 5px 12px; border-radius: 20px; text-transform: uppercase;
+  }
+
+  /* HERO */
+  .hero {
+    min-height: 95vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    text-align: center; padding: 80px 20px; position: relative; overflow: hidden;
+  }
+  .hero::before {
+    content: ''; position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%,-50%);
+    width: 800px; height: 800px;
+    background: radial-gradient(circle, rgba(255,140,66,0.07) 0%, transparent 70%);
+    border-radius: 50%; pointer-events: none;
+  }
+  .hero-eyebrow { color: #FFA05C; font-size: 12px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 28px; }
+  .hero-title { font-size: clamp(72px,13vw,120px); font-weight: 900; letter-spacing: -5px; line-height: 0.95; margin-bottom: 20px; }
+  .hero-title span { color: #FF8C42; }
+  .hero-sub { font-size: 14px; color: #6B5E4E; font-weight: 600; margin-bottom: 36px; letter-spacing: 4px; text-transform: uppercase; }
+  .hero-desc { font-size: clamp(17px,2.2vw,21px); color: #C4A882; max-width: 560px; line-height: 1.7; margin-bottom: 52px; }
+  .hero-desc strong { color: #F5EFE6; font-weight: 600; }
+  .pillars { display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; margin-bottom: 60px; }
+  .pillar-dot { width: 4px; height: 4px; border-radius: 2px; background: #3D3025; }
+  .pillar { color: #FFA05C; font-size: 13px; font-weight: 700; letter-spacing: 0.5px; }
+  .hero-stat-row { display: flex; gap: 48px; justify-content: center; flex-wrap: wrap; }
+  .hero-stat { text-align: center; }
+  .hero-stat-number { font-size: 28px; font-weight: 900; color: #FF8C42; letter-spacing: -1px; }
+  .hero-stat-label { font-size: 11px; color: #6B5E4E; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; margin-top: 4px; }
+
+  /* SHARED SECTION LAYOUT */
+  section { padding: 100px 20px; }
+  .container { max-width: 1080px; margin: 0 auto; }
+  .section-label { color: #FF8C42; font-size: 11px; font-weight: 800; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 16px; }
+  .section-title { font-size: clamp(30px,5vw,50px); font-weight: 800; letter-spacing: -1.5px; line-height: 1.1; margin-bottom: 20px; }
+  .section-desc { font-size: 16px; color: #C4A882; max-width: 540px; line-height: 1.75; }
+
+  /* LOGO MEANING */
+  .logo-section { background: #100F0D; }
+  .logo-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; margin-top: 56px; }
+  @media(max-width:768px){ .logo-layout{grid-template-columns:1fr;gap:40px;} }
+  .logo-visual {
+    background: linear-gradient(135deg,#1E1710,#141209);
+    border: 1px solid #2D2218; border-radius: 28px; padding: 56px;
+    text-align: center; position: relative; overflow: hidden;
+  }
+  .logo-visual::before {
+    content: ''; position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%,-50%);
+    width: 300px; height: 300px;
+    background: radial-gradient(circle, rgba(255,140,66,0.08) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+  .logo-eye-text { font-size: 64px; font-weight: 900; letter-spacing: 4px; position: relative; }
+  .logo-eye-text span { color: #FF8C42; }
+  .logo-eye-sub { font-size: 12px; color: #6B5E4E; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; margin-top: 16px; }
+  .logo-items { display: flex; flex-direction: column; gap: 22px; }
+  .logo-item { display: flex; gap: 16px; align-items: flex-start; }
+  .logo-letter {
+    width: 40px; height: 40px; border-radius: 10px;
+    background: rgba(255,140,66,0.1); border: 1px solid rgba(255,140,66,0.25);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 900; color: #FF8C42; flex-shrink: 0;
+  }
+  .logo-item-title { font-size: 15px; font-weight: 700; color: #F5EFE6; margin-bottom: 4px; }
+  .logo-item-desc { font-size: 13px; color: #8A7560; line-height: 1.6; }
+  .logo-comet { margin-top: 28px; padding-top: 22px; border-top: 1px solid #2D2218; color: #6B5E4E; font-size: 13px; line-height: 1.7; }
+
+  /* FEATURE GRID */
+  .features-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(310px,1fr)); gap: 18px; margin-top: 56px; }
+  .fc {
+    background: #1A1510; border: 1px solid #2D2218; border-radius: 20px; padding: 26px;
+    transition: border-color 0.2s, transform 0.2s; cursor: default;
+  }
+  .fc:hover { border-color: rgba(255,140,66,0.28); transform: translateY(-3px); }
+  .fc-icon { font-size: 26px; margin-bottom: 14px; }
+  .fc-title { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
+  .fc-desc { color: #8A7560; font-size: 13px; line-height: 1.65; }
+  .fc-tag { display: inline-block; background: rgba(255,140,66,0.1); color: #FFA05C; font-size: 10px; font-weight: 700; letter-spacing: 0.8px; padding: 3px 8px; border-radius: 6px; text-transform: uppercase; margin-bottom: 10px; }
+
+  /* AUTOMATIONS */
+  .auto-section { background: #100F0D; }
+  .auto-table { margin-top: 48px; border: 1px solid #2D2218; border-radius: 20px; overflow: hidden; }
+  .auto-row { display: grid; grid-template-columns: 180px 1fr 1fr; gap: 0; border-bottom: 1px solid #2D2218; align-items: stretch; }
+  .auto-row:last-child { border-bottom: none; }
+  .auto-row.header { background: #1A1510; }
+  .auto-cell { padding: 16px 20px; font-size: 13px; color: #C4A882; line-height: 1.5; }
+  .auto-cell.label { font-size: 14px; font-weight: 700; color: #F5EFE6; }
+  .auto-cell.head { font-size: 10px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; color: #FF8C42; display: flex; align-items: center; }
+  .auto-cell + .auto-cell { border-left: 1px solid #2D2218; }
+  @media(max-width:640px){ .auto-row{grid-template-columns:1fr;} .auto-cell+.auto-cell{border-left:none;border-top:1px solid #2D2218;} }
+
+  /* MEETING */
+  .meeting-section { background: #0F0E0B; }
+  .meeting-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; margin-top: 56px; align-items: start; }
+  @media(max-width:768px){ .meeting-grid{grid-template-columns:1fr;} }
+  .meeting-card {
+    background: #1A1510; border: 1px solid #2D2218; border-radius: 22px; padding: 28px;
+  }
+  .meeting-card-title { font-size: 14px; font-weight: 800; color: #FF8C42; letter-spacing: 0.5px; margin-bottom: 16px; text-transform: uppercase; font-size: 11px; letter-spacing: 1.5px; }
+  .meeting-item { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px; }
+  .meeting-item:last-child { margin-bottom: 0; }
+  .meeting-dot { width: 6px; height: 6px; border-radius: 3px; background: #FF8C42; flex-shrink: 0; margin-top: 6px; }
+  .meeting-item-text { font-size: 14px; color: #C4A882; line-height: 1.6; }
+  .meeting-item-text strong { color: #F5EFE6; }
+
+  /* DEVICE INTELLIGENCE */
+  .device-section { background: #100F0D; }
+  .device-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 16px; margin-top: 48px; }
+  .device-card {
+    background: #1A1510; border: 1px solid #2D2218; border-radius: 18px; padding: 24px;
+  }
+  .device-card-icon { font-size: 28px; margin-bottom: 12px; }
+  .device-card-title { font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+  .device-card-desc { color: #8A7560; font-size: 12px; line-height: 1.6; }
+
+  /* PRIVACY */
+  .privacy-section { background: #0F0E0B; }
+  .privacy-layers { display: flex; flex-direction: column; gap: 16px; margin-top: 48px; max-width: 680px; }
+  .privacy-layer {
+    display: flex; gap: 20px; align-items: flex-start;
+    background: #1A1510; border: 1px solid #2D2218; border-radius: 18px; padding: 22px;
+  }
+  .privacy-num {
+    width: 36px; height: 36px; border-radius: 9px;
+    background: rgba(255,140,66,0.1); border: 1px solid rgba(255,140,66,0.2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 800; color: #FF8C42; flex-shrink: 0;
+  }
+  .privacy-layer-title { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+  .privacy-layer-desc { font-size: 13px; color: #8A7560; line-height: 1.6; }
+
+  /* COMPARE */
+  .compare-section { background: #100F0D; }
+  .compare-table { margin-top: 48px; border: 1px solid #2D2218; border-radius: 20px; overflow: hidden; }
+  .compare-row { display: grid; grid-template-columns: 260px 1fr 1fr; border-bottom: 1px solid #2D2218; }
+  .compare-row:last-child { border-bottom: none; }
+  .compare-row.header { background: #1A1510; }
+  .compare-cell { padding: 14px 20px; font-size: 13px; color: #C4A882; }
+  .compare-cell.feature { font-weight: 600; color: #F5EFE6; }
+  .compare-cell.head { font-size: 10px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; color: #FF8C42; display: flex; align-items: center; }
+  .compare-cell + .compare-cell { border-left: 1px solid #2D2218; }
+  .check { color: #4ADE80; font-weight: 700; }
+  .cross { color: #6B5E4E; }
+  .partial { color: #FFA05C; }
+  @media(max-width:640px){ .compare-row{grid-template-columns:1fr;} .compare-cell+.compare-cell{border-left:none;border-top:1px solid #2D2218;} }
+
+  /* HOW */
+  .how-section { background: #0F0E0B; }
+  .steps { margin-top: 56px; }
+  .step { display: grid; grid-template-columns: 64px 1fr; gap: 28px; padding: 28px 0; border-bottom: 1px solid #2D2218; align-items: start; }
+  .step:last-child { border-bottom: none; }
+  .step-num {
+    width: 44px; height: 44px; border-radius: 11px;
+    background: rgba(255,140,66,0.1); border: 1px solid rgba(255,140,66,0.2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 800; color: #FF8C42; flex-shrink: 0;
+  }
+  .step-title { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+  .step-desc { color: #C4A882; font-size: 14px; line-height: 1.7; }
+  .step-eg {
+    margin-top: 12px; background: #1A1510; border-left: 3px solid #FF8C42;
+    border-radius: 0 8px 8px 0; padding: 10px 14px;
+    font-size: 13px; color: #FFA05C; font-style: italic;
+  }
+
+  /* CTA */
+  .cta-section { text-align: center; background: linear-gradient(135deg,#1A1510,#241E16); border-top: 1px solid #2D2218; }
+  .cta-title { font-size: clamp(30px,5vw,50px); font-weight: 800; letter-spacing: -1.5px; margin-bottom: 16px; }
+  .cta-title span { color: #FF8C42; }
+  .cta-sub { color: #C4A882; font-size: 16px; margin-bottom: 12px; }
+  .cta-note { color: #6B5E4E; font-size: 12px; }
+
+  footer { text-align: center; padding: 32px 20px; border-top: 1px solid #2D2218; color: #6B5E4E; font-size: 12px; }
+
+  @media(max-width:600px){
+    nav { padding: 16px 20px; }
+    .nav-links { display: none; }
+    .step { grid-template-columns: 48px 1fr; gap: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo"><img src="assets/lucy-icon.png" alt="LUCY" />LUC<span>Y</span></div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#meetings">Meetings</a>
+    <a href="#privacy">Privacy</a>
+    <a href="#testing" style="color:#FF8C42;font-weight:800;">Testing ✓</a>
+    <a href="#compare">Compare</a>
+  </div>
+  <div class="nav-badge">Private Beta</div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <!-- Hero orbital logo -->
+  <canvas id="lucy-hero-canvas" width="260" height="200" style="display:block;margin:0 auto 32px;"></canvas>
+  <div class="hero-eyebrow">Introducing</div>
+  <h1 class="hero-title">LUC<span>Y</span></h1>
+  <div class="hero-sub">Your Private AI Second Brain</div>
+  <p class="hero-desc">
+    <strong>Just say it.</strong> LUCY captures your thoughts, organizes your memories, and brings back what matters —
+    without you having to structure anything.
+  </p>
+  <div class="pillars">
+    <span class="pillar">Listen</span><div class="pillar-dot"></div>
+    <span class="pillar">Understand</span><div class="pillar-dot"></div>
+    <span class="pillar">Connect</span><div class="pillar-dot"></div>
+    <span class="pillar">Yield</span>
+  </div>
+  <div class="hero-stat-row">
+    <div class="hero-stat">
+      <div class="hero-stat-number">0</div>
+      <div class="hero-stat-label">Setup required</div>
+    </div>
+    <div class="hero-stat">
+      <div class="hero-stat-number">100%</div>
+      <div class="hero-stat-label">On your device</div>
+    </div>
+    <div class="hero-stat">
+      <div class="hero-stat-number">8</div>
+      <div class="hero-stat-label">Smart automations</div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────── HACKATHON PITCH ───────────── -->
+<section id="pitch" style="background:#0A0908;border-top:1px solid #2D2218;border-bottom:1px solid #2D2218;">
+  <div class="container" style="max-width:900px;">
+    <div class="section-label">The Pitch</div>
+    <h2 class="section-title">LUCY in 60 seconds</h2>
+
+    <p style="font-size:clamp(20px,2.6vw,26px);line-height:1.6;color:#F5EFE6;font-weight:600;margin:24px 0 8px;">
+      You said it once. Three days later, your phone remembered it for you.
+    </p>
+    <p style="font-size:17px;line-height:1.8;color:#C4A882;margin-bottom:40px;">
+      LUCY runs in the background of your life, capturing the stream of thoughts you would normally lose —
+      a task, a person, an expense, an idea — and silently organizes everything into a private, encrypted
+      second brain you can <strong style="color:#F5EFE6;">query like a conversation</strong>. No folders, no
+      tags, no setup. Speak or type one messy sentence; LUCY does the filing.
+    </p>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;margin-bottom:44px;">
+      <div class="pitch-card">
+        <div class="pitch-h">The problem</div>
+        <p class="pitch-p">Your best thoughts arrive at the worst times — walking, driving, mid-meeting. Notes apps demand structure you do not have a free hand for, so the thought is lost. Most "AI memory" tools send everything to the cloud and hallucinate confident nonsense.</p>
+      </div>
+      <div class="pitch-card">
+        <div class="pitch-h">The solution</div>
+        <p class="pitch-p">One capture box. LUCY extracts tasks, people, expenses, reminders, ideas and follow-ups from plain language, splits multi-event journals into separate memories, and connects them into a knowledge graph with evidence and confidence — never invented certainty.</p>
+      </div>
+      <div class="pitch-card">
+        <div class="pitch-h">Why it is different</div>
+        <p class="pitch-p">Local-first and encrypted (SQLCipher on-device). Bring your own model — Claude or OpenAI. It does not just store; it acts: one tap to call, navigate, set a timer, add a reminder, or schedule an event. And it surfaces what matters proactively.</p>
+      </div>
+    </div>
+
+    <h3 style="color:#FFA05C;font-size:13px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:16px;">The 90-second demo</h3>
+    <ol style="font-size:15px;line-height:1.9;color:#C4A882;padding-left:20px;margin-bottom:44px;">
+      <li>Open LUCY. Speak one sentence: <em style="color:#F5EFE6;">"Had a great call with Marcus about the Series B deck — he wants the revenue slide revised by Thursday. Also pick up wine for dinner Friday, about 40 dollars."</em></li>
+      <li>Watch it become structured memory in seconds: a <strong style="color:#F5EFE6;">task</strong> (revise revenue slide, due Thursday), a <strong style="color:#F5EFE6;">follow-up</strong> on Marcus, an <strong style="color:#F5EFE6;">expense</strong> ($40 wine, Friday) — from one breath.</li>
+      <li>Ask: <em style="color:#F5EFE6;">"What do I need to do before Thursday?"</em> — LUCY answers from your own memory, with sources.</li>
+      <li>Paste a whole day journal → it fans out into separate timeline memories, one headline per event.</li>
+      <li>Say <em style="color:#F5EFE6;">"Call Marcus"</em> → a confirmation card slides up → one tap → the dialer opens.</li>
+    </ol>
+
+    <h3 style="color:#FFA05C;font-size:13px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:16px;">Under the hood</h3>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:44px;">
+      <span class="pitch-chip">Expo / React Native</span>
+      <span class="pitch-chip">SQLCipher encrypted store</span>
+      <span class="pitch-chip">Claude + OpenAI (swappable)</span>
+      <span class="pitch-chip">LLM extraction → structured schema</span>
+      <span class="pitch-chip">Hybrid semantic + keyword search</span>
+      <span class="pitch-chip">Evidence-based knowledge graph</span>
+      <span class="pitch-chip">Background organizing</span>
+      <span class="pitch-chip">URL-scheme / intent automations</span>
+    </div>
+
+    <div style="background:#1A1510;border:1px solid #2D2218;border-radius:18px;padding:24px;">
+      <div class="pitch-h" style="margin-bottom:10px;">The one-line pitch</div>
+      <p style="font-size:19px;line-height:1.6;color:#F5EFE6;font-weight:600;margin:0;">
+        LUCY is a private, on-device AI second brain that turns the thoughts you speak in passing into an
+        organized, queryable memory — and acts on them with a single tap.
+      </p>
+    </div>
+  </div>
+</section>
+
+<style>
+  .pitch-card { background:#1A1510;border:1px solid #2D2218;border-radius:16px;padding:20px; }
+  .pitch-h { color:#FFA05C;font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px; }
+  .pitch-p { font-size:14px;line-height:1.7;color:#C4A882;margin:0; }
+  .pitch-chip { background:rgba(255,140,66,0.1);color:#FFA05C;font-size:12px;font-weight:700;padding:7px 13px;border-radius:20px;border:1px solid rgba(255,140,66,0.25); }
+</style>
+
+<!-- LOGO MEANING -->
+<section class="logo-section" id="logo">
+  <div class="container">
+    <div class="section-label">The name</div>
+    <h2 class="section-title">What LUCY means</h2>
+    <p class="section-desc">The logo is not just letters — it is an eye, an orbit, and a philosophy.</p>
+    <div class="logo-layout">
+      <div class="logo-visual">
+        <canvas id="lucy-logo-canvas" width="320" height="240" style="display:block;margin:0 auto;position:relative;z-index:1;"></canvas>
+        <div class="logo-eye-sub" style="margin-top:20px;">L · U · C orbiting around Y</div>
+      </div>
+      <div>
+        <div class="logo-items">
+          <div class="logo-item">
+            <div class="logo-letter" style="color:#FF8C42;">Y</div>
+            <div>
+              <div class="logo-item-title">Yield — the sun at the center</div>
+              <div class="logo-item-desc">The Y is the pupil — the moment of insight. The sun. The point everything orbits around. Yield is the output: the insight, the memory, the answer surfaced exactly when you need it.</div>
+            </div>
+          </div>
+          <div class="logo-item">
+            <div class="logo-letter">L</div>
+            <div>
+              <div class="logo-item-title">Listen — the first orbit</div>
+              <div class="logo-item-desc">The L is the closest planet. LUCY is always listening — passively, patiently, without you having to do anything. The foundation of everything.</div>
+            </div>
+          </div>
+          <div class="logo-item">
+            <div class="logo-letter">U</div>
+            <div>
+              <div class="logo-item-title">Understand — the second orbit</div>
+              <div class="logo-item-desc">The U is further out, processing what was heard. LUCY structures your thoughts into tasks, people, expenses, ideas, moods — making sense of everything you said.</div>
+            </div>
+          </div>
+          <div class="logo-item">
+            <div class="logo-letter">C</div>
+            <div>
+              <div class="logo-item-title">Connect — the third orbit</div>
+              <div class="logo-item-desc">The C is the outermost planet. LUCY links memories and patterns — building a knowledge graph of your life over time. Sam. The Q3 project. The follow-up from last Tuesday.</div>
+            </div>
+          </div>
+        </div>
+        <div class="logo-comet">
+          The <strong style="color:#F5EFE6;">comet tails</strong> in the orbit connect the dots — literally. The <strong style="color:#F5EFE6;">elliptical orbit</strong> traces an eye shape. LUCY is the guardian eye — always watching over your memory, never sleeping.
+          <br><br>
+          <strong style="color:#FFA05C;">L·U·C·Y orbiting around Y — a second brain that never sleeps.</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MAIN FEATURES -->
+<section id="features">
+  <div class="container">
+    <div class="section-label">Capabilities</div>
+    <h2 class="section-title">Everything LUCY<br>can do for you</h2>
+    <p class="section-desc">No structure required. Just speak or type — LUCY does the rest.</p>
+
+    <div class="features-grid">
+
+      <!-- Capture -->
+      <div class="fc">
+        <div class="fc-tag">Capture</div>
+        <div class="fc-icon">💬</div>
+        <div class="fc-title">Text &amp; Voice Capture</div>
+        <div class="fc-desc">Type naturally or tap the mic button — LUCY transcribes using on-device speech recognition (iOS) or Whisper fallback. No formatting needed. Your words, LUCY's work.</div>
+      </div>
+
+      <!-- Passive Listening -->
+      <div class="fc">
+        <div class="fc-tag">Always On</div>
+        <div class="fc-icon">🎙️</div>
+        <div class="fc-title">Passive Listening</div>
+        <div class="fc-desc">Enable Listen mode and LUCY transcribes the room in 10-minute batches — meetings, ideas, conversations — automatically organized as memories. Orange indicator shows when active.</div>
+      </div>
+
+      <!-- Smart Board -->
+      <div class="fc">
+        <div class="fc-tag">Board</div>
+        <div class="fc-icon">📋</div>
+        <div class="fc-title">Intelligent Task Board</div>
+        <div class="fc-desc">Tasks extracted automatically from any thought. Grouped by context with urgent tasks first. Animated completion with strikethrough, done-today section, and undo.</div>
+      </div>
+
+      <!-- Today Dashboard -->
+      <div class="fc">
+        <div class="fc-tag">Dashboard</div>
+        <div class="fc-icon">🌅</div>
+        <div class="fc-title">Today at a Glance</div>
+        <div class="fc-desc">Five views: priorities, context questions, memory map, captured timeline, and library. Mood trend bar. Follow-ups. On This Day memories from your past self.</div>
+      </div>
+
+      <!-- Ask LUCY -->
+      <div class="fc">
+        <div class="fc-tag">Ask</div>
+        <div class="fc-icon">🔍</div>
+        <div class="fc-title">Ask Your Memory</div>
+        <div class="fc-desc">"What did I work on this week?" "How much did I spend on food?" "What did Sam say about the deadline?" — answers from your memory, not the internet. Persistent conversation history.</div>
+      </div>
+
+      <!-- AI Insights -->
+      <div class="fc">
+        <div class="fc-tag">Intelligence</div>
+        <div class="fc-icon">✦</div>
+        <div class="fc-title">Daily AI Insights</div>
+        <div class="fc-desc">Every day LUCY generates 6 genuinely interesting questions it can already answer — specific to what it has observed about your habits, mood, relationships, and progress.</div>
+      </div>
+
+      <!-- Memory Map -->
+      <div class="fc">
+        <div class="fc-tag">Memory</div>
+        <div class="fc-icon">🧠</div>
+        <div class="fc-title">Living Memory Map</div>
+        <div class="fc-desc">LUCY builds a knowledge graph — people, projects, ideas and how they connect over time. Named entities, relationship connections, learned signals — all searchable.</div>
+      </div>
+
+      <!-- Open Loops -->
+      <div class="fc">
+        <div class="fc-tag">Tracking</div>
+        <div class="fc-icon">🔁</div>
+        <div class="fc-title">Open Loops &amp; Follow-ups</div>
+        <div class="fc-desc">"I'll come back to this" and "Sam said he'll do X by Friday" tracked automatically until you mark them done. Never let important commitments slip again.</div>
+      </div>
+
+      <!-- Semantic Search -->
+      <div class="fc">
+        <div class="fc-tag">Search</div>
+        <div class="fc-icon">🔎</div>
+        <div class="fc-title">Semantic Memory Search</div>
+        <div class="fc-desc">Search by meaning, not just keywords. Type a concept and LUCY finds memories that are semantically related — powered by vector embeddings, on-device.</div>
+      </div>
+
+      <!-- Library -->
+      <div class="fc">
+        <div class="fc-tag">Library</div>
+        <div class="fc-icon">📚</div>
+        <div class="fc-title">Organized Library</div>
+        <div class="fc-desc">Six tabs: Todos, Ideas, Expenses, Places, Interests, People. Everything LUCY extracted from your captures — browseable, privacy-labeled, always up to date.</div>
+      </div>
+
+      <!-- On This Day -->
+      <div class="fc">
+        <div class="fc-tag">Retrospective</div>
+        <div class="fc-icon">📅</div>
+        <div class="fc-title">On This Day</div>
+        <div class="fc-desc">Every day LUCY surfaces memories from the same date in past years — like a message from your past self. Shown as a notification and as a card in the Today view.</div>
+      </div>
+
+      <!-- Memory Correction -->
+      <div class="fc">
+        <div class="fc-tag">Feedback</div>
+        <div class="fc-icon">✏️</div>
+        <div class="fc-title">Memory Correction</div>
+        <div class="fc-desc">Tap ? on any memory and tell LUCY what she got wrong. She re-processes with your correction immediately — and your original thought is always preserved.</div>
+      </div>
+
+      <!-- AI Text Actions -->
+      <div class="fc">
+        <div class="fc-tag">Actions</div>
+        <div class="fc-icon">⚡</div>
+        <div class="fc-title">AI Text Actions</div>
+        <div class="fc-desc">On any captured memory: Summarize, Improve writing, Extract action items, Translate to English, Explain this, or Structure notes — powered by your connected AI.</div>
+      </div>
+
+      <!-- Mood Tracking -->
+      <div class="fc">
+        <div class="fc-tag">Wellbeing</div>
+        <div class="fc-icon">😊</div>
+        <div class="fc-title">Automatic Mood Tracking</div>
+        <div class="fc-desc">LUCY detects tone in every capture — positive, calm, stressed, frustrated. 7-day trend visualized as color dots. Fed into morning briefs and weekly insights.</div>
+      </div>
+
+      <!-- People Intelligence -->
+      <div class="fc">
+        <div class="fc-tag">Relationships</div>
+        <div class="fc-icon">👤</div>
+        <div class="fc-title">People Intelligence</div>
+        <div class="fc-desc">Everyone you mention in captures gets tracked: mention count, last seen date, typical context, pending follow-ups. Relationship gaps surface in morning briefs.</div>
+      </div>
+
+      <!-- Notifications -->
+      <div class="fc">
+        <div class="fc-tag">Proactive</div>
+        <div class="fc-icon">🌤️</div>
+        <div class="fc-title">Morning Briefs &amp; Weekly Insights</div>
+        <div class="fc-desc">7am daily brief: critical items, open loops, mood trend, relationship gaps — synthesized into a warm 2-sentence message. Sunday evening: weekly pattern reflection.</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- AUTOMATIONS -->
+<section class="auto-section" id="automations">
+  <div class="container">
+    <div class="section-label">Automation Engine</div>
+    <h2 class="section-title">Say it. LUCY does it.</h2>
+    <p class="section-desc">LUCY detects action intent in natural language and executes it with a single confirmation tap. No setup, no shortcuts to build.</p>
+
+    <div class="auto-table">
+      <div class="auto-row header">
+        <div class="auto-cell head">You say</div>
+        <div class="auto-cell head">What LUCY does</div>
+        <div class="auto-cell head">Example trigger</div>
+      </div>
+      <div class="auto-row">
+        <div class="auto-cell label">Set a timer</div>
+        <div class="auto-cell">Opens iOS Shortcuts or Android alarm with the exact duration</div>
+        <div class="auto-cell" style="color:#FFA05C;">"Set a 20 minute timer"</div>
+      </div>
+      <div class="auto-row">
+        <div class="auto-cell label">Call someone</div>
+        <div class="auto-cell">Looks up the contact and dials</div>
+        <div class="auto-cell" style="color:#FFA05C;">"Call Mom now"</div>
+      </div>
+      <div class="auto-row">
+        <div class="auto-cell label">Navigate</div>
+        <div class="auto-cell">Opens Maps with destination</div>
+        <div class="auto-cell" style="color:#FFA05C;">"Navigate to the office"</div>
+      </div>
+      <div class="auto-row">
+        <div class="auto-cell label">Play music</div>
+        <div class="auto-cell">Opens Spotify or Apple Music with your search</div>
+        <div class="auto-cell" style="color:#FFA05C;">"Play Focus playlist"</div>
+      </div>
+      <div class="auto-row">
+        <div class="auto-cell label">Add reminder</div>
+        <div class="auto-cell">Creates item in iOS Reminders on the correct list</div>
+        <div class="auto-cell" style="color:#FFA05C;">"Add milk to grocery list"</div>
+      </div>
+      <div class="auto-row">
+        <div class="auto-cell label">Send message</div>
+        <div class="auto-cell">Pre-fills iMessage or SMS to contact</div>
+        <div class="auto-cell" style="color:#FFA05C;">"Text Sam: I'll be 10 min late"</div>
+      </div>
+      <div class="auto-row">
+        <div class="auto-cell label">Run shortcut</div>
+        <div class="auto-cell">Triggers named iOS Shortcut or routine</div>
+        <div class="auto-cell" style="color:#FFA05C;">"Run my morning routine"</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MEETING INTELLIGENCE -->
+<section class="meeting-section" id="meetings">
+  <div class="container">
+    <div class="section-label">Meeting Intelligence</div>
+    <h2 class="section-title">Your meeting<br>never forgets.</h2>
+    <p class="section-desc">Three layers of meeting intelligence — before, during, and after every meeting.</p>
+
+    <div class="meeting-grid">
+
+      <div class="meeting-card">
+        <div class="meeting-card-title">Before — Pre-Meeting Brief</div>
+        <div class="meeting-item">
+          <div class="meeting-dot"></div>
+          <div class="meeting-item-text"><strong>30 minutes before</strong> any calendar meeting, LUCY sends a notification</div>
+        </div>
+        <div class="meeting-item">
+          <div class="meeting-dot"></div>
+          <div class="meeting-item-text">Brief includes <strong>relationship history</strong> with each attendee from your captures</div>
+        </div>
+        <div class="meeting-item">
+          <div class="meeting-dot"></div>
+          <div class="meeting-item-text">Pulls <strong>recent captures</strong> mentioning the attendees or meeting topic</div>
+        </div>
+        <div class="meeting-item">
+          <div class="meeting-dot"></div>
+          <div class="meeting-item-text">Synthesized into a <strong>2-sentence actionable brief</strong> by GPT when remote intelligence is on</div>
+        </div>
+      </div>
+
+      <div class="meeting-card">
+        <div class="meeting-card-title">During — Meeting Mode</div>
+        <div class="meeting-item">
+          <div class="meeting-dot"></div>
+          <div class="meeting-item-text">Tap "Meeting" in the header — LUCY starts listening with a <strong>named session</strong></div>
+        </div>
+        <div class="meeting-item">
+          <div class="meeting-dot"></div>
+          <div class="meeting-item-text">Live <strong>duration counter</strong> and word count shown on screen</div>
+        </div>
+        <div class="meeting-item">
+          <div class="meeting-dot"></div>
+          <div class="meeting-item-text"><strong>Full transcript accumulated</strong> — private on this device throughout</div>
+        </div>
+        <div class="meeting-item">
+          <div class="meeting-dot"></div>
+          <div class="meeting-item-text">Tap "End meeting" → LUCY generates a structured summary in seconds</div>
+        </div>
+      </div>
+
+      <div class="meeting-card">
+        <div class="meeting-card-title">Summary — What LUCY Extracts</div>
+        <div class="meeting-item">
+          <div class="meeting-dot"></div>
+          <div class="meeting-item-text"><strong>Headline</strong>: one sentence describing the meeting</div>
+        </div>
+        <div class="meeting-item">
+          <div class="meeting-dot"></div>
+          <div class="meeting-item-text"><strong>Key Decisions</strong>: explicit decisions made in the room</div>
+        </div>
+        <div class="meeting-item">
+          <div class="meeting-dot"></div>
+          <div class="meeting-item-text"><strong>Action Items</strong>: task + owner + deadline for each commitment</div>
+        </div>
+        <div class="meeting-item">
+          <div class="meeting-dot"></div>
+          <div class="meeting-item-text"><strong>Open Questions</strong>: things raised but not resolved</div>
+        </div>
+        <div class="meeting-item">
+          <div class="meeting-dot"></div>
+          <div class="meeting-item-text"><strong>Next Steps</strong>: brief narrative of what happens after</div>
+        </div>
+      </div>
+
+      <div class="meeting-card">
+        <div class="meeting-card-title">After — Post-Meeting Prompt</div>
+        <div class="meeting-item">
+          <div class="meeting-dot"></div>
+          <div class="meeting-item-text"><strong>15 minutes after</strong> a meeting ends, LUCY nudges: "capture your notes before they fade"</div>
+        </div>
+        <div class="meeting-item">
+          <div class="meeting-dot"></div>
+          <div class="meeting-item-text">Save summary to LUCY memory — <strong>full transcript + structured intelligence</strong> stored as a capture</div>
+        </div>
+        <div class="meeting-item">
+          <div class="meeting-dot"></div>
+          <div class="meeting-item-text">All attendees <strong>added to People memory</strong> and future briefs will reference this meeting</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- DEVICE INTELLIGENCE -->
+<section class="device-section" id="intelligence">
+  <div class="container">
+    <div class="section-label">Device Intelligence</div>
+    <h2 class="section-title">Your phone reveals<br>your life patterns.</h2>
+    <p class="section-desc">LUCY reads device signals not as statistics but as life intelligence — answering "what does your behavior reveal about you right now?"</p>
+
+    <div class="device-grid">
+
+      <div class="device-card">
+        <div class="device-card-icon">📊</div>
+        <div class="device-card-title">Capture Rhythm</div>
+        <div class="device-card-desc">LUCY knows your most active hour, most captured day, and average thoughts per day this week. Protect your best thinking time.</div>
+      </div>
+
+      <div class="device-card">
+        <div class="device-card-icon">🔋</div>
+        <div class="device-card-title">Battery Patterns</div>
+        <div class="device-card-desc">Which day drains your phone fastest? Battery drain correlates with your busiest days. LUCY tracks this passively and answers "What's my battery level?"</div>
+      </div>
+
+      <div class="device-card">
+        <div class="device-card-icon">😊</div>
+        <div class="device-card-title">Mood vs Activity</div>
+        <div class="device-card-desc">More captures on positive days, fewer on stressed ones. LUCY correlates your emotional tone with your capture behavior and surfaces the pattern.</div>
+      </div>
+
+      <div class="device-card">
+        <div class="device-card-icon">📍</div>
+        <div class="device-card-title">Location Context</div>
+        <div class="device-card-desc">City/area context added to your daily brief. Answer "Where am I?" in Ask. Time zone changes detected automatically. Never precise GPS — always city-level.</div>
+      </div>
+
+      <div class="device-card">
+        <div class="device-card-icon">💡</div>
+        <div class="device-card-title">Top Daily Insight</div>
+        <div class="device-card-desc">One specific, actionable, empathetic observation about your life — synthesized from device patterns and mood. Not a statistic. An observation.</div>
+      </div>
+
+      <div class="device-card">
+        <div class="device-card-icon">⏰</div>
+        <div class="device-card-title">Progress Check-ins</div>
+        <div class="device-card-desc">Optional nudge every 2 hours from 8am to 6pm. "What are you working on?" Keeps your memory rich and prevents important moments from slipping.</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- HOW TO USE -->
+<section class="how-section" id="how">
+  <div class="container">
+    <div class="section-label">Getting Started</div>
+    <h2 class="section-title">How to use LUCY</h2>
+    <p class="section-desc">No setup required. Start capturing and LUCY does the rest.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div>
+          <div class="step-title">Just say what happened</div>
+          <div class="step-desc">Type or speak naturally in the Board screen. No formatting, no structure. LUCY extracts tasks, people, expenses, follow-ups, and ideas automatically.</div>
+          <div class="step-eg">"Had a meeting with Sam about Q3 budget. He'll send the spreadsheet by Friday. Need to follow up with design team about mockups."</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div>
+          <div class="step-title">LUCY organizes it</div>
+          <div class="step-desc">Within seconds, your capture becomes structured memory: a task for the design follow-up, a follow-up assigned to Sam, a reminder for Friday, and a connection between Sam and the Q3 project.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div>
+          <div class="step-title">Enable passive listening during meetings</div>
+          <div class="step-desc">Tap Listen in the header or go to Connectors. LUCY transcribes everything in batches. Orange indicator confirms it's active. Or tap Meeting for structured session tracking.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div>
+          <div class="step-title">Ask anything, anytime</div>
+          <div class="step-desc">Open the Ask tab and ask anything. Answers come from your own memory. Add your OpenAI key in Settings → Remote Intelligence for richer, LLM-synthesized responses.</div>
+          <div class="step-eg">"What did Sam say about the budget?" · "What tasks are urgent?" · "How much did I spend on food this month?"</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <div>
+          <div class="step-title">Wake up to a brief</div>
+          <div class="step-desc">LUCY sends a morning brief between 7–9am with your critical items, mood trend, relationship gaps, and open loops — personalized and synthesized. No app opens required.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRIVACY -->
+<section class="privacy-section" id="privacy">
+  <div class="container">
+    <div class="section-label">Privacy</div>
+    <h2 class="section-title">Your data stays<br>on your phone.</h2>
+    <p class="section-desc">Four layers of privacy architecture, designed from day one. No compromises.</p>
+
+    <div class="privacy-layers">
+      <div class="privacy-layer">
+        <div class="privacy-num">1</div>
+        <div>
+          <div class="privacy-layer-title">Local-first storage</div>
+          <div class="privacy-layer-desc">All data stored in SQLite on your device. Never transmitted without your action. Works fully offline. No account, no login, no tracking.</div>
+        </div>
+      </div>
+      <div class="privacy-layer">
+        <div class="privacy-num">2</div>
+        <div>
+          <div class="privacy-layer-title">Privacy classification per capture</div>
+          <div class="privacy-layer-desc">You can mark any capture as "Contains private details" before sending. LUCY's extraction also detects sensitive patterns automatically. Three levels: normal / local / private.</div>
+        </div>
+      </div>
+      <div class="privacy-layer">
+        <div class="privacy-num">3</div>
+        <div>
+          <div class="privacy-layer-title">On-device masking before remote AI</div>
+          <div class="privacy-layer-desc">When remote intelligence is enabled and a private thought needs AI processing, the on-device model replaces sensitive content with placeholders first. "[PERSON_1] mentioned [FINANCIAL_DETAIL_1]" — never real names or numbers.</div>
+        </div>
+      </div>
+      <div class="privacy-layer">
+        <div class="privacy-num">4</div>
+        <div>
+          <div class="privacy-layer-title">Selective and auditable remote</div>
+          <div class="privacy-layer-desc">Remote intelligence is entirely optional and off by default. Only the specific text you ask about is sent — never raw device data, camera, location, or battery readings. Your OpenAI key is stored in the device's secure keychain.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- COMPARE -->
+<section class="compare-section" id="compare">
+  <div class="container">
+    <div class="section-label">How LUCY compares</div>
+    <h2 class="section-title">What no other app<br>fully replicates</h2>
+    <p class="section-desc">Each of these features exists somewhere. None of them exist together — on mobile, private, with no hardware required.</p>
+
+    <div class="compare-table">
+      <div class="compare-row header">
+        <div class="compare-cell head" style="border-right:1px solid #2D2218;">Capability</div>
+        <div class="compare-cell head" style="border-right:1px solid #2D2218;">LUCY</div>
+        <div class="compare-cell head">Nearest rival</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell feature">Passive mobile mic listening</div>
+        <div class="compare-cell"><span class="check">✓</span> On-device, no hardware</div>
+        <div class="compare-cell"><span class="partial">Partial</span> Limitless (requires $99 pendant)</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell feature">Structured extraction from speech</div>
+        <div class="compare-cell"><span class="check">✓</span> Tasks, expenses, people, ideas in one pass</div>
+        <div class="compare-cell"><span class="cross">✗</span> None comparable</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell feature">Knowledge graph over personal life</div>
+        <div class="compare-cell"><span class="check">✓</span> Longitudinal, automatic</div>
+        <div class="compare-cell"><span class="partial">Partial</span> Mem.ai, Obsidian (manual)</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell feature">Morning brief with relationship context</div>
+        <div class="compare-cell"><span class="check">✓</span> Daily, personalized</div>
+        <div class="compare-cell"><span class="cross">✗</span> None</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell feature">On This Day from your own notes</div>
+        <div class="compare-cell"><span class="check">✓</span> From your captures</div>
+        <div class="compare-cell"><span class="partial">Partial</span> Day One (photos only), Rewind (screen only)</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell feature">Automatic mood tracking from text</div>
+        <div class="compare-cell"><span class="check">✓</span> Per capture, 7-day trend</div>
+        <div class="compare-cell"><span class="cross">✗</span> None</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell feature">Pre-meeting brief from memory</div>
+        <div class="compare-cell"><span class="check">✓</span> 30 min before, relationship-enriched</div>
+        <div class="compare-cell"><span class="partial">Partial</span> Limitless (wearable required)</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell feature">Private content masking before AI</div>
+        <div class="compare-cell"><span class="check">✓</span> On-device masking layer</div>
+        <div class="compare-cell"><span class="cross">✗</span> None</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell feature">Automation intent detection</div>
+        <div class="compare-cell"><span class="check">✓</span> 7 actions, one-tap confirm</div>
+        <div class="compare-cell"><span class="cross">✗</span> None in personal memory apps</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell feature">Fully local with optional remote upgrade</div>
+        <div class="compare-cell"><span class="check">✓</span> Works completely offline</div>
+        <div class="compare-cell"><span class="partial">Partial</span> Obsidian (local, no AI)</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <div class="container">
+    <h2 class="cta-title">Start using <span>LUCY</span></h2>
+    <p class="cta-sub">Available on iOS (TestFlight) and Android. No account required.</p>
+    <p class="cta-note">Private beta · For authorized testers only</p>
+  </div>
+</section>
+
+<!-- TESTING CHECKLIST SECTION -->
+<section id="testing" style="background:#0A0908;">
+<div class="container">
+  <div class="section-label">Beta Testing</div>
+  <h2 class="section-title">Test every feature</h2>
+  <p class="section-desc" style="margin-bottom:8px;">Tap each item to mark it tested. Progress is saved in your browser.</p>
+  <p style="font-size:12px;color:#6B5E4E;margin-bottom:40px;">Install the latest TestFlight build first. All tests assume iOS device.</p>
+
+  <div id="test-progress" style="background:#1A1510;border:1px solid #2D2218;border-radius:16px;padding:20px;margin-bottom:32px;display:flex;align-items:center;gap:16px;">
+    <div style="flex:1;">
+      <div style="font-size:13px;color:#C4A882;margin-bottom:8px;font-weight:600;">Progress</div>
+      <div style="height:6px;background:#2D2218;border-radius:3px;overflow:hidden;">
+        <div id="progress-bar" style="height:6px;background:linear-gradient(90deg,#FF8C42,#FFA05C);border-radius:3px;width:0%;transition:width 0.4s;"></div>
+      </div>
+    </div>
+    <div style="text-align:right;">
+      <div id="progress-count" style="font-size:22px;font-weight:900;color:#FF8C42;">0</div>
+      <div style="font-size:11px;color:#6B5E4E;">tested</div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+    <button onclick="filterTests('all')" id="filter-all" class="test-filter active">All</button>
+    <button onclick="filterTests('core')" id="filter-core" class="test-filter">Core</button>
+    <button onclick="filterTests('automation')" id="filter-automation" class="test-filter">Automations</button>
+    <button onclick="filterTests('ai')" id="filter-ai" class="test-filter">AI Features</button>
+    <button onclick="filterTests('connectors')" id="filter-connectors" class="test-filter">Connectors</button>
+    <button onclick="filterTests('ui')" id="filter-ui" class="test-filter">UI/UX</button>
+  </div>
+  <div style="display:flex;gap:10px;margin-bottom:32px;flex-wrap:wrap;">
+    <button onclick="filterByStatus('done')" id="filter-done" class="test-filter" style="border-color:rgba(74,222,128,0.3);color:#4ADE80;">✓ Done</button>
+    <button onclick="filterByStatus('pending')" id="filter-pending" class="test-filter">◻ Not done</button>
+  </div>
+
+  <div id="test-list"></div>
+
+  <div style="margin-top:32px;text-align:center;">
+    <button onclick="resetAll()" style="background:transparent;border:1px solid #2D2218;color:#6B5E4E;padding:10px 20px;border-radius:12px;cursor:pointer;font-size:13px;">Reset all</button>
+  </div>
+</div>
+</section>
+
+<style>
+.test-filter {
+  background:#1A1510;border:1px solid #2D2218;color:#8A7560;
+  padding:7px 16px;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700;
+  font-family:inherit;transition:all 0.2s;
+}
+.test-filter.active,.test-filter:hover { background:rgba(255,140,66,0.12);border-color:rgba(255,140,66,0.3);color:#FFA05C; }
+.test-card {
+  background:#1A1510;border:1px solid #2D2218;border-radius:16px;
+  padding:18px 20px;margin-bottom:10px;cursor:pointer;
+  display:flex;align-items:flex-start;gap:14px;
+  transition:border-color 0.2s,background 0.2s;
+}
+.test-card:hover { border-color:rgba(255,140,66,0.2); }
+.test-card.done { background:rgba(74,222,128,0.06);border-color:rgba(74,222,128,0.25); }
+.test-check {
+  width:22px;height:22px;border-radius:11px;border:1.5px solid #3D3025;
+  flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:800;margin-top:1px;transition:all 0.2s;
+}
+.test-card.done .test-check { background:#4ADE80;border-color:#4ADE80;color:#0F0E0B; }
+.test-name { font-size:14px;font-weight:700;color:#F5EFE6;margin-bottom:4px; }
+.test-steps { font-size:12px;color:#8A7560;line-height:1.6; }
+.test-tag { display:inline-block;background:rgba(255,140,66,0.1);color:#FFA05C;font-size:9px;font-weight:800;letter-spacing:0.8px;padding:2px 7px;border-radius:5px;text-transform:uppercase;margin-bottom:8px; }
+</style>
+
+<script>
+const TESTS = [
+  // ───────── SETUP (do these first) ─────────
+  { id:'setup-model', cat:'core', name:'Choose an AI model', steps:'1) Settings → AI extraction model. 2) Tap the dropdown. 3) Pick a model. For a Claude model, first paste your Anthropic key in the Claude API key box below and tap Save (it is verified). 4) The dropdown should now show the chosen model.' },
+  { id:'setup-remote', cat:'core', name:'Turn on remote intelligence', steps:'1) Settings → open the queue/diagnostics panel. 2) Confirm PROCESSING WITH shows your model and a green "Remote ready". 3) If it is red, add/verify the API key — captures will stay queued until remote is reachable.' },
+
+  // ───────── CAPTURE ─────────
+  { id:'cap-text', cat:'core', name:'Capture a single thought', steps:'1) Open the Tasks (Board) tab. 2) Type "Call the bank tomorrow at 3pm". 3) Tap Send (arrow). 4) A "Got it" toast shows and the box clears. 5) Today → Timeline: within ~30s the card changes from "Organizing…" to an extracted headline.' },
+  { id:'cap-list-split', cat:'core', name:'A list splits into separate tasks', steps:'1) Tasks → type "buy milk, eggs, bread and onions". 2) Send. 3) Open the Grocery List category. 4) Verify FOUR separate checkbox items (Buy milk / Buy eggs / Buy bread / Buy onions) — NOT one combined line.' },
+  { id:'cap-journal-split', cat:'ai', name:'A day journal splits into per-event memories', steps:'1) Tasks → paste a day log, e.g. "Woke up at 7. Had a great meeting with Sam about the deck. Bought groceries for 40 dollars. Felt tired in the evening." 2) Send. 3) Today → Timeline. 4) Verify it becomes SEVERAL separate memories (one per event) each with its own headline — not one giant entry.' },
+  { id:'cap-share-md', cat:'core', name:'Share a .md / .txt file into LUCY', steps:'1) Open Files / Downloads and pick a .md or .txt journal. 2) Share → choose LUCY. 3) LUCY opens on the capture screen. 4) Verify the file contents are captured (appear in Today → Timeline within ~30s, split into events if it is a day log).' },
+  { id:'cap-voice', cat:'core', name:'Voice input', steps:'1) Tasks composer → tap the mic button. 2) Grant microphone permission if asked. 3) Speak a sentence → tap to stop. 4) The transcribed text appears in the input box. 5) Send it.' },
+  { id:'cap-receipt', cat:'core', name:'Receipt OCR', steps:'1) Tasks composer → tap the camera button. 2) Photograph a receipt. 3) LUCY fills in amount + merchant as an expense. 4) Confirm it lands in Brain → Expenses.' },
+  { id:'cap-private', cat:'core', name:'Mark a capture private', steps:'1) Tasks → toggle "Contains private details". 2) Type a note → Send. 3) Toast reads "Protected thought queued". 4) Timeline card shows a privacy badge / lock.' },
+
+  // ───────── TASKS / BOARD ─────────
+  { id:'task-categories', cat:'core', name:'Tasks grouped into categories', steps:'1) Capture a few tasks (a grocery item, a call, a workout). 2) Tasks tab shows them grouped into category cards (Grocery List, Calls & Messages, Daily Habits, etc.). 3) Each card shows an item count.' },
+  { id:'task-scroll', cat:'ui', name:'Long task list scrolls', steps:'1) Capture 15+ items in one category (e.g. many grocery items). 2) Tasks → tap that category card. 3) The detail sheet opens. 4) Verify you can SCROLL all the way to the bottom of the list (not just the first few).' },
+  { id:'task-done', cat:'core', name:'Complete + undo a task', steps:'1) Open a category sheet. 2) Tap a task circle → strikethrough animation → it moves to done. 3) Tap "Undo" → it returns to pending.' },
+  { id:'task-add-inline', cat:'core', name:'Quick-add inside a category', steps:'1) Open a category sheet. 2) Type in the "Add to …" box at the bottom → tap +. 3) The new item appears in the list immediately.' },
+
+  // ───────── TIMELINE ─────────
+  { id:'tl-headlines', cat:'core', name:'Timeline reads as headlines', steps:'1) Today → Timeline. 2) Each memory shows a one-line extracted headline + mood color. 3) Tap a card to expand key points; tap again to collapse.' },
+  { id:'tl-menu', cat:'core', name:'Memory ⋯ menu: Correct / Reprocess / Delete', steps:'1) Today → Timeline → tap ⋯ on a memory. 2) Menu shows Correct, Reprocess, Delete. 3) Tap "Correct this memory" → write what is wrong → Send. 4) Reopen ⋯ → Reprocess → it re-organizes (no duplicate tasks created).' },
+  { id:'tl-delete-brain', cat:'core', name:'Delete removes it from the Brain too', steps:'1) Timeline → ⋯ → Delete → confirm. 2) The memory disappears from Timeline. 3) Check Brain (Todos/Ideas/Expenses) and Ask — the deleted content must NOT resurface anywhere.' },
+  { id:'tl-failed-retry', cat:'core', name:'Failed capture shows a retry path', steps:'1) (Easiest with remote off / wrong key.) Capture a thought. 2) Timeline shows amber "Couldn\'t organize — tap ⋯ to retry" (not an endless "Organizing…"). 3) Fix the key in Settings. 4) ⋯ → Reprocess → it organizes.' },
+  { id:'tl-quick', cat:'core', name:'Quick-capture bar on Timeline', steps:'1) Today → Timeline → type in the "Capture a thought…" bar at top → Send. 2) A new memory appears.' },
+
+  // ───────── ASK ─────────
+  { id:'ask-llm', cat:'ai', name:'Ask a free-form question', steps:'1) Ask tab → type "What did I work on today?" 2) LUCY answers from YOUR captures (specific, not generic). 3) Try "What do I need to do before Friday?"' },
+  { id:'ask-sources', cat:'ai', name:'Source citations', steps:'1) Ask any memory question. 2) Below the answer, "From your memory" chips show which captures were used. 3) (Requires an OpenAI key for embeddings, even on Claude.)' },
+  { id:'ask-device', cat:'ai', name:'Ask live device questions', steps:'1) Ask "What timezone am I in?" or "What is my battery level?" 2) LUCY answers from live device data.' },
+  { id:'ask-insights', cat:'ai', name:'Pre-generated insight questions', steps:'1) Ask → Insights tab. 2) See 4+ questions LUCY generated about your habits/mood/progress. 3) Tap one → the answer reveals.' },
+
+  // ───────── AUTOMATIONS (need the latest native build) ─────────
+  { id:'auto-saves', cat:'automation', name:'An action never loses the thought', steps:'1) Tasks → type "Call mom now". 2) The "LUCY can do this" confirmation card appears. 3) Tap "Not now". 4) Verify the thought is STILL saved in Timeline (a misfired action must not lose your note).' },
+  { id:'auto-timer', cat:'automation', name:'Set a timer', steps:'1) Type "Set a timer for 5 minutes". 2) Tap the confirmation. 3) The system clock timer opens, or LUCY schedules a 5-min notification as fallback.' },
+  { id:'auto-call', cat:'automation', name:'Call a contact', steps:'1) Type "Call [a real contact name] now". 2) Grant Contacts permission if asked. 3) Tap confirm → the phone dialer opens with that number.' },
+  { id:'auto-navigate', cat:'automation', name:'Navigate to a place', steps:'1) Type "Navigate to the office" (or any place). 2) Tap confirm → Maps opens with the destination.' },
+  { id:'auto-message', cat:'automation', name:'Message a contact', steps:'1) Type "Text Sarah I am running late". 2) Tap confirm → Messages/SMS opens pre-filled to that contact.' },
+  { id:'auto-remind', cat:'automation', name:'Add to a reminders list', steps:'1) Type "Add milk to grocery list". 2) Tap confirm → an item is created in the Reminders app (iOS).' },
+  { id:'auto-event', cat:'automation', name:'Schedule a calendar event', steps:'1) Type "Schedule a meeting with Sam tomorrow at 3pm". 2) Grant Calendar permission. 3) Tap confirm → a calendar event is created for tomorrow 3pm.' },
+  { id:'auto-play', cat:'automation', name:'Play music', steps:'1) Type "Play my focus playlist". 2) Tap confirm → Spotify (or Apple Music) opens with the search.' },
+
+  // ───────── PROACTIVE AI ─────────
+  { id:'ai-meeting', cat:'ai', name:'Meeting Mode summary', steps:'1) Tap "Meeting" in the top header. 2) Name it → Start → speak for 1-2 minutes. 3) End meeting. 4) Verify an AI summary with decisions + action items appears.' },
+  { id:'ai-morning', cat:'ai', name:'Morning brief notification', steps:'1) Settings → enable Background organizing. 2) Between 7-9am the next day, check for a warm 2-sentence LUCY morning brief notification.' },
+  { id:'ai-onthisday', cat:'ai', name:'On This Day', steps:'1) After several days of use, check Today → Focus Now for an "On this day" card, and notifications for past memories.' },
+  { id:'ai-mood', cat:'ai', name:'Mood tracking', steps:'1) Capture several notes with feeling. 2) Today → Focus Now → the mood card shows a tone emoji + trend dots.' },
+
+  // ───────── CONNECTORS ─────────
+  { id:'con-calendar', cat:'connectors', name:'Calendar pre-meeting brief', steps:'1) Settings → Connectors → enable Calendar → grant permission. 2) ~30 min before a real calendar event, LUCY sends a pre-meeting brief pulling related people/notes.' },
+  { id:'con-location', cat:'connectors', name:'Location context', steps:'1) Settings → Connectors → enable Location. 2) Ask "Where am I?" → LUCY answers with city/area (never precise GPS).' },
+  { id:'con-passive', cat:'connectors', name:'Passive listening', steps:'1) Settings → Connectors → enable Passive listening. 2) Tap the Listen header pill. 3) Speak for ~2 min → stop. 4) A transcript batch is captured into the Timeline.' },
+
+  // ───────── DIAGNOSTICS / DATA ─────────
+  { id:'diag-panel', cat:'core', name:'Queue diagnostics', steps:'1) Settings → queue panel. 2) See counts (Queued / Organizing / Will retry / Remembered). 3) PROCESSING WITH shows the active model + remote status. 4) If anything failed, expand "Recent errors".' },
+  { id:'data-export-json', cat:'core', name:'Export as JSON', steps:'1) Settings → Export as JSON. 2) The system share sheet appears with a .json file containing your data.' },
+  { id:'data-export-md', cat:'core', name:'Export as Markdown', steps:'1) Settings → Export as Markdown. 2) The share sheet appears with a .md file.' },
+  { id:'data-reprocess-all', cat:'core', name:'Reprocess all memories', steps:'1) Settings → Reprocess all memories. 2) All derived items are rebuilt from your raw captures (no duplicates, no error).' },
+  { id:'data-delete-all', cat:'core', name:'Delete all memories', steps:'1) Settings → Delete all memories → confirm. 2) Everything clears — Timeline, Tasks, Brain and Ask are all empty (captures included, not just the derived items).' },
+
+  // ───────── UI / UX ─────────
+  { id:'ui-onboarding', cat:'ui', name:'First-run onboarding', steps:'1) Fresh install (delete + reinstall). 2) The onboarding slides appear on first launch.' },
+  { id:'ui-splash', cat:'ui', name:'Animated splash', steps:'1) Force-close the app. 2) Reopen → the L·U·C·Y wordmark animation plays → fades into the app.' },
+  { id:'ui-nav', cat:'ui', name:'Bottom navigation', steps:'1) Verify the four tabs: Home (Today) · Tasks · Ask · Settings. 2) Today has Timeline / Focus Now / Brain views.' },
+];
+
+let currentFilter = 'all';
+let statusFilter = 'all'; // 'all' | 'done' | 'pending'
+const done = new Set(JSON.parse(localStorage.getItem('lucy-tests-done') || '[]'));
+
+function save() { localStorage.setItem('lucy-tests-done', JSON.stringify([...done])); }
+
+function updateProgress() {
+  const total = TESTS.length;
+  const count = done.size;
+  document.getElementById('progress-count').textContent = `${count}/${total}`;
+  document.getElementById('progress-bar').style.width = `${(count/total)*100}%`;
+}
+
+function filterTests(cat) {
+  currentFilter = cat;
+  document.querySelectorAll('.test-filter').forEach(b => b.classList.remove('active'));
+  document.getElementById(`filter-${cat}`).classList.add('active');
+  renderTests();
+}
+
+function filterByStatus(status) {
+  statusFilter = statusFilter === status ? 'all' : status;
+  ['done','pending'].forEach(s => {
+    const btn = document.getElementById(`filter-${s}`);
+    if (btn) btn.classList.toggle('active', statusFilter === s);
+  });
+  renderTests();
+}
+
+function renderTests() {
+  const list = document.getElementById('test-list');
+  let filtered = currentFilter === 'all' ? TESTS : TESTS.filter(t => t.cat === currentFilter);
+  if (statusFilter === 'done') filtered = filtered.filter(t => done.has(t.id));
+  if (statusFilter === 'pending') filtered = filtered.filter(t => !done.has(t.id));
+  if (filtered.length === 0) {
+    list.innerHTML = `<p style="color:#6B5E4E;text-align:center;padding:32px;">No tests match this filter.</p>`;
+    return;
+  }
+  list.innerHTML = filtered.map(t => `
+    <div class="test-card ${done.has(t.id) ? 'done' : ''}" onclick="toggle('${t.id}')">
+      <div class="test-check">${done.has(t.id) ? '✓' : ''}</div>
+      <div style="flex:1;">
+        <div class="test-tag">${t.cat}</div>
+        <div class="test-name">${t.name}</div>
+        <div class="test-steps">${t.steps}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function toggle(id) {
+  if (done.has(id)) done.delete(id); else done.add(id);
+  save(); updateProgress(); renderTests();
+}
+
+function resetAll() {
+  if (!confirm('Reset all test progress?')) return;
+  done.clear(); save(); updateProgress(); renderTests();
+}
+
+renderTests();
+updateProgress();
+</script>
+
+<footer>© 2026 LUCY · Private Beta · Scuts Technologies Private Limited · Listen · Understand · Connect · Yield</footer>
+
+<script>
+function startOrbitalAnimation(canvasId, scale) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const CX = W / 2, CY = H / 2;
+  const RX = 100 * scale, RY = 35 * scale;
+  const TAIL = 8;
+  const ORANGE = '#FF8C42', GLOW = '#FFA05C', DIM = '#FDDCB0';
+
+  const planets = [
+    { letter: 'L', phase: 0,     speed: 1.0,  color: ORANGE, size: 9 * scale },
+    { letter: 'U', phase: 2.094, speed: 1.3,  color: GLOW,   size: 7 * scale },
+    { letter: 'C', phase: 4.189, speed: 0.75, color: DIM,    size: 6 * scale },
+  ];
+
+  let angles = planets.map(p => p.phase);
+  let sunPulse = 0, last = 0;
+
+  function draw(ts) {
+    const dt = last ? (ts - last) / 1000 : 0;
+    last = ts; sunPulse += dt * 2;
+    ctx.clearRect(0, 0, W, H);
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,140,66,0.1)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.ellipse(CX, CY, RX, RY, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    angles = angles.map((a, i) => a + dt * planets[i].speed);
+
+    planets.forEach((p, i) => {
+      const angle = angles[i];
+      const x = CX + RX * Math.cos(angle);
+      const y = CY + RY * Math.sin(angle);
+      const depth = (y - (CY - RY)) / (2 * RY);
+
+      for (let j = 1; j <= TAIL; j++) {
+        const ta = angle - j * 0.14;
+        const tx = CX + RX * Math.cos(ta), ty = CY + RY * Math.sin(ta);
+        const alpha = (1 - j / (TAIL + 2)) * (0.4 + depth * 0.4);
+        const ts2 = Math.max(1.5, (p.size - j * 0.8) * 0.72);
+        ctx.save(); ctx.globalAlpha = alpha; ctx.fillStyle = p.color;
+        ctx.beginPath(); ctx.arc(tx, ty, ts2 / 2, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+      }
+
+      const pSize = p.size + depth * 2.5, pAlpha = 0.5 + depth * 0.5;
+      ctx.save();
+      const grad = ctx.createRadialGradient(x, y, 0, x, y, pSize * 1.8);
+      grad.addColorStop(0, p.color + '55'); grad.addColorStop(1, 'transparent');
+      ctx.globalAlpha = pAlpha * 0.7; ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(x, y, pSize * 1.8, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = pAlpha; ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(x, y, pSize, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1; ctx.fillStyle = '#0F0E0B';
+      ctx.font = `bold ${Math.max(7, pSize * 1.1)}px Inter, sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(p.letter, x, y + 0.5); ctx.restore();
+    });
+
+    const pulse = 1 + Math.sin(sunPulse) * 0.12, sunR = 16 * scale * pulse;
+    ctx.save();
+    const sunGrad = ctx.createRadialGradient(CX, CY, 0, CX, CY, sunR * 2.2);
+    sunGrad.addColorStop(0, 'rgba(255,140,66,0.28)'); sunGrad.addColorStop(1, 'transparent');
+    ctx.fillStyle = sunGrad; ctx.beginPath(); ctx.arc(CX, CY, sunR * 2.2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = ORANGE; ctx.beginPath(); ctx.arc(CX, CY, sunR, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#0F0E0B';
+    ctx.font = `900 ${Math.round(sunR * 0.85)}px Inter, sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('Y', CX, CY + 1); ctx.restore();
+
+    requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+}
+
+(function() {
+  startOrbitalAnimation('lucy-hero-canvas', 1.1);
+  startOrbitalAnimation('lucy-logo-canvas', 1.0);
+})();
+
+// Logo canvases are already initialized above
+</script>
+
+</body>
+</html>

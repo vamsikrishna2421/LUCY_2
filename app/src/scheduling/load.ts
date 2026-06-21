@@ -1,0 +1,160 @@
+/**
+ * Effort LOAD model for the scheduler (user's model). Every task draws on three efforts, each 0..1:
+ *   - brain     : cognitive effort (thinking/problem-solving)
+ *   - muscle    : physical effort (the body)
+ *   - attention : focus/vigilance the task demands moment-to-moment
+ *
+ * Two ideas drive scheduling from this:
+ *  1) SUSTAINABILITY — you can't hold a high *average* of an effort over a rolling ~3h window
+ *     (back-to-back deep focus fries the brain; back-to-back lifting wrecks the body). So we score a
+ *     candidate slot by the rolling time-weighted average it would create together with nearby blocks
+ *     (gaps = recovery), and steer the task toward a slot that keeps each effort under its cap — i.e.
+ *     INTERLEAVE brain-heavy and body-heavy work instead of stacking the same kind.
+ *  2) PARALLELISM — a low-ATTENTION task (laundry running, a download, a podcast) can overlap another
+ *     task. Attention is exactly the calendar's exclusive "focus" axis, so attention level decides
+ *     whether something needs a slot to itself or can ride alongside (see canParallelize).
+ *
+ * Pure + deterministic (see tests/load.ts). Wired into findSlots (scheduler.ts).
+ */
+import type { AvailabilityProfile, TaskResources } from './types';
+import { isInPeakWindow, isInLowWindow, isAsleepAt } from './freeBusy';
+
+export interface TaskLoad { brain: number; muscle: number; attention: number }
+
+export const LOAD_WINDOW_MS = 3 * 60 * 60 * 1000; // rolling window the average is taken over
+export const BRAIN_CAP = 0.6;       // baseline sustainable avg brain effort over the window
+export const MUSCLE_CAP = 0.6;      // baseline sustainable avg muscle effort over the window
+export const ATTENTION_CAP = 0.7;   // you can pay attention a bit longer than you can think hard
+export const ATTENTION_PARALLEL = 0.3; // at/below this, a task is light enough to run alongside another
+const STEP_MS = 15 * 60 * 1000;
+
+/** Baseline capacity (the flat caps) — used when no time context is supplied. */
+export const BASE_CAPACITY: TaskLoad = { brain: BRAIN_CAP, muscle: MUSCLE_CAP, attention: ATTENTION_CAP };
+
+/**
+ * Effort CAPACITY at a given instant — the threshold varies across the day with the energy curve:
+ * peak hours can sustain more, the afternoon dip less, and sleep is ZERO (nothing should land there).
+ * This makes the same deep-work concentration acceptable in the morning peak but not in the 4pm crash.
+ */
+export function capacityAt(av: AvailabilityProfile, ms: number): TaskLoad {
+  if (isAsleepAt(av, ms)) return { brain: 0, muscle: 0, attention: 0 };
+  // A user-shaped curve (per effort, 24 hourly levels) wins over the learned peak/dip.
+  const cur = av.energyCurves;
+  if (cur && cur.brain?.length === 24 && cur.muscle?.length === 24 && cur.attention?.length === 24) {
+    const h = new Date(ms).getHours();
+    const clamp = (v: number) => (Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : BRAIN_CAP);
+    return { brain: clamp(cur.brain[h]), muscle: clamp(cur.muscle[h]), attention: clamp(cur.attention[h]) };
+  }
+  if (isInPeakWindow(av, ms, ms)) return { brain: 0.85, muscle: 0.65, attention: 0.9 };
+  if (isInLowWindow(av, ms, ms)) return { brain: 0.4, muscle: 0.55, attention: 0.5 };
+  return BASE_CAPACITY;
+}
+
+/**
+ * A sensible STARTING set of 3 curves (24 hourly levels each) for the user to tweak in the editor —
+ * seeded from what LUCY already knows: sleep → 0, learned peak → high, learned dip → low, else baseline.
+ * Muscle skews a touch later in the day than brain. Lets the editor open from inference, not a flat line.
+ */
+export function suggestedEnergyCurves(av: AvailabilityProfile): { brain: number[]; muscle: number[]; attention: number[] } {
+  const brain: number[] = [], muscle: number[] = [], attention: number[] = [];
+  for (let h = 0; h < 24; h++) {
+    const mid = new Date(); mid.setHours(h, 30, 0, 0);
+    const ms = mid.getTime();
+    if (isAsleepAt(av, ms)) { brain.push(0); muscle.push(0); attention.push(0); continue; }
+    const peak = isInPeakWindow(av, ms, ms);
+    const low = isInLowWindow(av, ms, ms);
+    const base = peak ? 0.85 : low ? 0.4 : 0.6;
+    brain.push(base);
+    attention.push(peak ? 0.9 : low ? 0.5 : 0.65);
+    // Muscle is flatter and a bit stronger midday/evening (less tied to the mental peak).
+    muscle.push(h >= 16 && h <= 20 ? Math.max(base, 0.7) : Math.max(0.45, base - 0.1));
+  }
+  return { brain, muscle, attention };
+}
+
+const BODY_RE = /\b(gym|work ?out|workout|exercise|run|running|jog|jogging|yoga|lift|lifting|weights?|sport|swim|swimming|cycl(e|ing)|bike|biking|hike|hiking|walk|pilates|cardio|stretch|basketball|soccer|football|tennis|climb|dance)\b/i;
+const DEEP_RE = /\b(code|coding|program|write|writing|draft|design|study|learn|research|analy[sz]e|architect|debug|plan|planning|read|review|prepare|practice|deep work|model|spec|outline)\b/i;
+const VOICE_RE = /\b(call|meeting|standup|stand-up|sync|interview|1:1|one on one|discuss|present|presentation|pitch)\b/i;
+const CHORE_RE = /\b(cook|bake|clean|tidy|repair|fix|build|assemble|paint|wash|chop|iron|garden|move|moving|carry|haul|pack|unpack|grocer|shop|shopping|errand|drop ?off|pick ?up|pickup|deliver|return|drive|driving|laundry|chore)\b/i;
+const PASSIVE_RE = /\b(laundry|dishwasher|wash(ing)? machine|download|backup|upload|charg(e|ing)|soak|marinate|defrost|boil|render|sync(ing)?|podcast|listen)\b/i;
+
+/** Brain/muscle/attention composition for a task or block, from its title + resources (+ energy). */
+export function loadOf(title: string, resources?: TaskResources | null, energy?: string | null): TaskLoad {
+  const t = title || '';
+  const axes = resources?.axes ?? [];
+  const loc = resources?.location ?? null;
+
+  // 1) Passive background (runs itself) → near-zero everything, parallelizable.
+  if (energy === 'passive' || (PASSIVE_RE.test(t) && !DEEP_RE.test(t))) return { brain: 0.1, muscle: 0.1, attention: 0.1 };
+  // 2) Physical/exercise → muscle-dominant, moderate attention.
+  if (BODY_RE.test(t) || loc === 'gym') return { brain: 0.15, muscle: 0.85, attention: 0.4 };
+  // 3) Deep cognitive → brain + high attention.
+  if (energy === 'deep' || DEEP_RE.test(t)) return { brain: 0.9, muscle: 0.1, attention: 0.85 };
+  // 4) Voice / meetings → brain-ish, very high attention (you must be present), light body.
+  if (axes.includes('voice') || VOICE_RE.test(t)) return { brain: 0.55, muscle: 0.15, attention: 0.8 };
+  // 5) Hands-on chores / errands / driving / out-and-about → muscle-leaning, real attention.
+  if (axes.includes('hands') || CHORE_RE.test(t) || (loc && loc !== 'office')) return { brain: 0.3, muscle: 0.6, attention: 0.55 };
+  // 6) Shallow/admin default → moderate brain + moderate attention.
+  return { brain: 0.4, muscle: 0.15, attention: 0.5 };
+}
+
+/** A task light enough on attention to run in parallel with something else. */
+export function canParallelize(load: TaskLoad): boolean {
+  return load.attention <= ATTENTION_PARALLEL;
+}
+
+export interface BlockLoad { start: number; end: number; brain: number; muscle: number; attention: number }
+
+/**
+ * The MAX time-weighted average of each effort over any ~3h window that includes part of the candidate
+ * span — the worst concentration the candidate would create together with nearby blocks. Gaps count as
+ * 0 (recovery), so a half-empty window averages low.
+ */
+export function rollingExtremes(
+  candStart: number, candEnd: number, cand: TaskLoad, blocks: BlockLoad[],
+  windowMs = LOAD_WINDOW_MS, stepMs = STEP_MS,
+): TaskLoad {
+  const spans: BlockLoad[] = [...blocks, { brain: cand.brain, muscle: cand.muscle, attention: cand.attention, start: candStart, end: candEnd }];
+  let maxBrain = 0, maxMuscle = 0, maxAttention = 0;
+  for (let ws = candStart - windowMs; ws <= candEnd; ws += stepMs) {
+    const we = ws + windowMs;
+    if (we <= candStart || ws >= candEnd) continue; // window must overlap the candidate
+    let brainMin = 0, muscleMin = 0, attnMin = 0;
+    for (const sp of spans) {
+      const ov = Math.min(we, sp.end) - Math.max(ws, sp.start);
+      if (ov <= 0) continue;
+      brainMin += sp.brain * ov; muscleMin += sp.muscle * ov; attnMin += sp.attention * ov;
+    }
+    if (brainMin / windowMs > maxBrain) maxBrain = brainMin / windowMs;
+    if (muscleMin / windowMs > maxMuscle) maxMuscle = muscleMin / windowMs;
+    if (attnMin / windowMs > maxAttention) maxAttention = attnMin / windowMs;
+  }
+  return { brain: maxBrain, muscle: maxMuscle, attention: maxAttention };
+}
+
+export interface LoadScore { delta: number; reasons: string[]; rolling: TaskLoad }
+
+/**
+ * Score a candidate slot for effort sustainability. Negative `delta` = it would over-concentrate an
+ * effort in some 3h window (penalty scales with how far over cap). Small positive reward + a human
+ * reason when a demanding task lands somewhere genuinely sustainable.
+ */
+export function scoreLoad(
+  cand: TaskLoad, candStart: number, candEnd: number, blocks: BlockLoad[], caps: TaskLoad = BASE_CAPACITY,
+): LoadScore {
+  const rolling = rollingExtremes(candStart, candEnd, cand, blocks);
+  let delta = 0;
+  const reasons: string[] = [];
+
+  // Compare the rolling average against the TIME-LOCAL capacity (higher in the peak, lower in the dip).
+  if (rolling.brain > caps.brain) delta -= Math.round((rolling.brain - caps.brain) * 180);
+  if (rolling.muscle > caps.muscle) delta -= Math.round((rolling.muscle - caps.muscle) * 180);
+  if (rolling.attention > caps.attention) delta -= Math.round((rolling.attention - caps.attention) * 120);
+
+  // Reward + explain only when a demanding task sits somewhere it stays sustainable.
+  if (delta === 0) {
+    if (cand.brain >= 0.6 && rolling.brain <= caps.brain) { delta += 8; reasons.push('keeps your focus load sustainable'); }
+    else if (cand.muscle >= 0.6 && rolling.muscle <= caps.muscle) { delta += 8; reasons.push('balances your physical effort'); }
+  }
+  return { delta, reasons, rolling };
+}
