@@ -45,4 +45,9 @@ metrics dashboard) that 1.0 lacked. Ship something **real and runnable**, not va
 
 ## Progress journal
 - 2026-06-21: workspace forked, deps installed, foundation docs written (inventory, direction,
-  architecture, design system), git wired to LUCY_2. Spawning workstream agents.
+  architecture, design system), git wired to LUCY_2. Foundation committed + pushed (8db2486).
+- 2026-06-21: launched 5 background workstream agents — cataloguer (Feature Catalog), designsys
+  (app/src/ui primitives), monetization (billing+gating), monitoring (telemetry), dashboard
+  (Next.js metrics). Each owns a disjoint dir; orchestrator integrates centrally. Added CI workflow.
+- Next (on agent completion): install native deps centrally, wire providers into App.tsx, then begin
+  Phase 1 seam read + Phase 2 IA, then Workstream F core-loop screen redesign.
