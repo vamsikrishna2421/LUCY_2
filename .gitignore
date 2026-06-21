@@ -2,11 +2,17 @@
 .env
 .env.*
 !.env.example
+.secrets/
 *.pem
 *.key
+*.p8
+*.mobileprovision
 **/secrets.json
 **/google-services.json
 **/GoogleService-Info.plist
+
+# ── Eval / benchmark data (local only) ─────────────────────────────────
+benchmarks/
 
 # ── Dependencies ───────────────────────────────────────────────────────
 node_modules/

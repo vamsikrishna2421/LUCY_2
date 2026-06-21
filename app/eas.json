@@ -6,6 +6,7 @@
   "build": {
     "testflight": {
       "distribution": "store",
+      "autoIncrement": true,
       "channel": "production",
       "env": {
         "EXPO_PUBLIC_AI_MODE": "hybrid",
@@ -19,6 +20,7 @@
     },
     "android-release": {
       "distribution": "internal",
+      "autoIncrement": true,
       "channel": "production",
       "env": {
         "EXPO_PUBLIC_AI_MODE": "hybrid",

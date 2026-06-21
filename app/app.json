@@ -3,11 +3,11 @@
     "name": "LUCY",
     "slug": "lucy",
     "scheme": "lucy",
-    "version": "1.3.0",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/lucy-eye-icon.png",
     "userInterfaceStyle": "dark",
-    "runtimeVersion": "5",
+    "runtimeVersion": "6",
     "updates": {
       "url": "https://u.expo.dev/1a602e40-067f-4786-a9a6-26c6cc15bda6",
       "requestHeaders": { "expo-channel-name": "production" },
@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.lucy",
-      "buildNumber": "1.0.152",
+      "buildNumber": "2.0.0",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.com.anonymous.lucy"
@@ -85,7 +85,7 @@
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
       "package": "com.anonymous.lucy",
-      "versionCode": 104,
+      "versionCode": 105,
       "intentFilters": [
         {
           "action": "SEND",
