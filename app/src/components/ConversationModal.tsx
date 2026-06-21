@@ -312,7 +312,9 @@ const styles = StyleSheet.create({
 
   // Lucy's last reply text area (scrollable; caps the card height so it stays compact).
   lucyScroll: {
-    maxHeight: 240,
+    // Compact (~3 lines) so the card never eats much screen — the content auto-scrolls within this small
+    // window while Lucy speaks, and the user can keep using the app behind the non-blocking card.
+    maxHeight: 72,
     marginBottom: 6,
   },
   lucyTextWrap: {
