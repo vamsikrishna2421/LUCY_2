@@ -11,6 +11,7 @@ import {
   Animated,
   Easing,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -48,7 +49,7 @@ export default function ConversationModal({
   const dotOpacity = useRef(new Animated.Value(1)).current;
   const dotLoop = useRef<Animated.CompositeAnimation | null>(null);
   // Seconds left before the card self-dismisses after Lucy ends the conversation (null = not counting).
-  const AUTO_DISMISS_SECONDS = 15;
+  const AUTO_DISMISS_SECONDS = 4;
   const [dismissIn, setDismissIn] = useState<number | null>(null);
 
   // Subscribe to the conversation engine while mounted.
@@ -161,14 +162,21 @@ export default function ConversationModal({
             )}
           </View>
 
-          {/* Lucy's last message (capped so the card stays compact) */}
-          <View style={styles.lucyTextWrap}>
+          {/* Lucy's last message — scrollable so long replies (10+ lines) are fully readable while she
+              speaks, instead of being clipped to the first few lines. */}
+          <ScrollView
+            style={styles.lucyScroll}
+            contentContainerStyle={styles.lucyTextWrap}
+            showsVerticalScrollIndicator
+            nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
+          >
             {lastLucyTurn ? (
-              <Text style={styles.lucyText} numberOfLines={3}>{lastLucyTurn.text}</Text>
+              <Text style={styles.lucyText}>{lastLucyTurn.text}</Text>
             ) : snap.state === 'listening' ? (
               <Text style={styles.lucyPlaceholder}>What's up?</Text>
             ) : null}
-          </View>
+          </ScrollView>
 
           {/* User's live partial transcript */}
           {snap.partial ? (
@@ -274,10 +282,13 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // Lucy's last reply text area.
+  // Lucy's last reply text area (scrollable; caps the card height so it stays compact).
+  lucyScroll: {
+    maxHeight: 150,
+    marginBottom: 6,
+  },
   lucyTextWrap: {
     justifyContent: 'center',
-    marginBottom: 6,
   },
   lucyText: {
     color: C.textDark,

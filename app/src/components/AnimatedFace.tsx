@@ -20,15 +20,17 @@ function moodForPhase(phase: DayPhase): Mood {
   return phase === 'night' ? 'sleeping' : 'awake';
 }
 
+// Marker is always "lucy" so the floating cloud reads naturally as "Lucy Thinking" / "Lucy Listening"
+// (it used to read "ask Thinking", "audio Listening", which were confusing).
 const STATUS_META: Record<Exclude<LucyStatus, 'idle'>, { marker: string; label: string }> = {
-  organizing: { marker: 'memory', label: 'Organizing' },
-  listening: { marker: 'audio', label: 'Listening' },
-  speaking: { marker: 'voice', label: 'Speaking' },
-  saving: { marker: 'saved', label: 'Saving' },
-  sleeping: { marker: 'quiet', label: 'Resting' },
-  thinking: { marker: 'ask', label: 'Thinking' },
-  reading: { marker: 'brief', label: 'Reading' },
-  music: { marker: 'tune', label: 'Listening' },
+  organizing: { marker: 'lucy', label: 'Organizing' },
+  listening: { marker: 'lucy', label: 'Listening' },
+  speaking: { marker: 'lucy', label: 'Speaking' },
+  saving: { marker: 'lucy', label: 'Saving' },
+  sleeping: { marker: 'lucy', label: 'Resting' },
+  thinking: { marker: 'lucy', label: 'Thinking' },
+  reading: { marker: 'lucy', label: 'Reading' },
+  music: { marker: 'lucy', label: 'Listening' },
 };
 
 const PHASE_PALETTE: Record<DayPhase, { orb: string; glow: string; highlight: string; cloud: string; ring: string }> = {
@@ -81,11 +83,14 @@ export function AnimatedFace({
   onPress,
   celebrateKey,
   status = 'idle',
+  showStatusLabel = true,
 }: {
   unreadCount: number;
   onPress: () => void;
   celebrateKey?: number;
   status?: LucyStatus;
+  /** Show the floating status cloud ("AUDIO Listening" etc.). Off for the draggable orb to avoid clutter. */
+  showStatusLabel?: boolean;
 }) {
   const [phase, setPhase] = useState<DayPhase>(() => phaseForHour(new Date().getHours()));
   const [mood, setMood] = useState<Mood>(() => moodForPhase(phaseForHour(new Date().getHours())));
@@ -743,7 +748,7 @@ export function AnimatedFace({
           </Animated.Text>
         ) : null}
 
-        {effectiveStatus !== 'idle' && meta ? (
+        {showStatusLabel && effectiveStatus !== 'idle' && meta ? (
           <Animated.View
             pointerEvents="none"
             style={[
@@ -762,7 +767,7 @@ export function AnimatedFace({
             <Text style={styles.cloudText} numberOfLines={1}>{meta.label}</Text>
           </Animated.View>
         ) : null}
-        {effectiveStatus !== 'idle' ? <Animated.View style={[styles.tailDot1, { opacity: cloudAnim }]} /> : null}
+        {showStatusLabel && effectiveStatus !== 'idle' ? <Animated.View style={[styles.tailDot1, { opacity: cloudAnim }]} /> : null}
 
         {unreadCount > 0 ? (
           <View style={styles.badge}>

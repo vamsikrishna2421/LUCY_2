@@ -82,6 +82,14 @@ function isLucyToken(word: string): boolean {
   return false;
 }
 
+/** True if a spoken word is a plausible "hey" — the required wake prefix, tolerant of mishearings. */
+function isHeyToken(word: string): boolean {
+  const raw = (word || '').toLowerCase().replace(/[^a-z]/g, '');
+  if (!raw) return false;
+  if (['hey', 'hay', 'hai', 'heya', 'heyy', 'hi', 'ay', 'he', 'hej'].includes(raw)) return true;
+  return levenshtein(raw, 'hey') <= 1;
+}
+
 export type WakeWordStatus = 'disabled' | 'starting' | 'listening' | 'unavailable';
 
 class WakeWordListener {
@@ -191,7 +199,6 @@ class WakeWordListener {
 
   private startRecognition(): void {
     if (!this.enabled || this.running || isMicBusy()) return;
-    this.setStatus('starting');
     this.configureListeners();
     try {
       ExpoSpeechRecognitionModule.start({
@@ -207,6 +214,9 @@ class WakeWordListener {
       });
       this.running = true;
       this.lastEventAt = Date.now();
+      // Reflect "ready/listening" as soon as the recognizer starts — not only after the first speech
+      // result — otherwise the pill sat on "Starting…" indefinitely in a quiet room.
+      this.setStatus('listening');
     } catch (e) {
       console.warn('[WakeWord] start failed:', e);
       this.running = false;
@@ -243,8 +253,9 @@ class WakeWordListener {
           // (last 6 tokens) from the end and take the latest Lucy-like token.
           const start = Math.max(0, tokens.length - 6);
           let matchIdx = -1;
+          // Require "hey" immediately before "lucy" — bare "Lucy" in normal speech was waking her up.
           for (let t = tokens.length - 1; t >= start; t--) {
-            if (isLucyToken(tokens[t])) { matchIdx = t; break; }
+            if (isLucyToken(tokens[t]) && t > 0 && isHeyToken(tokens[t - 1])) { matchIdx = t; break; }
           }
           if (matchIdx === -1) continue;
           if (Date.now() < this.cooldownUntil) return;
@@ -278,17 +289,16 @@ class WakeWordListener {
           }
           return;
         }
-        // Transient errors (no-speech, network, audio-hardware, etc.): restart after a beat.
-        this.setStatus('starting');
+        // Transient errors (network, audio-hardware, etc.): restart after a beat WITHOUT flipping the
+        // indicator back to "Starting…" (avoids the starting↔listening flicker).
         this.scheduleStart(1200);
       }),
       ExpoSpeechRecognitionModule.addListener('end', () => {
         this.lastEventAt = Date.now();
         this.running = false;
-        if (this.enabled && !isMicBusy()) {
-          this.setStatus('starting');
-          this.scheduleStart(300);
-        }
+        // Routine stop after a segment — quietly restart; keep 'listening' so the indicator doesn't
+        // flicker starting↔listening between restarts.
+        if (this.enabled && !isMicBusy()) this.scheduleStart(300);
       }),
     ];
   }

@@ -194,7 +194,12 @@ class ConversationManager {
         lang: this.locale,
         interimResults: true,
         continuous: true,
-        requiresOnDeviceRecognition: this.onDevice,
+        // Do NOT force on-device recognition. On iOS the on-device model is only installed for some
+        // locales (typically en-US) — forcing it for e.g. en-IN (what a Telugu+English profile resolves
+        // to) silently captured nothing, so the conversation "never listened". Letting the OS recognizer
+        // choose (it uses on-device when available, else the cloud recognizer) makes it work for every
+        // resolved locale — the same pragmatic stance the wake word already takes.
+        requiresOnDeviceRecognition: false,
         addsPunctuation: true,
         // 'voiceChat' enables Apple's voice-processing I/O (acoustic echo cancellation + noise
         // suppression). 'measurement' disabled it, so LUCY heard her own TTS through the speaker and

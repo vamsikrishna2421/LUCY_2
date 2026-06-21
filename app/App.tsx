@@ -804,27 +804,15 @@ export default function App() {
     } catch { Alert.alert('Could not read that', 'Please try again with a clearer photo.'); } finally { setSnapBusy(false); }
   }, [goToDashView, drainQueue]);
 
-  // The "Hey Lucy" wake-word status pill (pinned top-right via styles.globalFace). LUCY's face itself is
-  // now the draggable <FloatingLucy> overlay (mounted once, below) — it occupies zero fixed layout space
-  // and can be moved anywhere, so it no longer lives in this fixed header slot.
-  const renderLucyFace = () => (
-    wakeWordEnabled && wakeStatus !== 'disabled' ? (
-      <View style={styles.faceRow}>
-        <View style={styles.wakePill}>
-          <View style={[styles.wakeDot, {
-            backgroundColor: wakeStatus === 'listening' ? '#4ADE80'
-              : wakeStatus === 'unavailable' ? '#EF4444'
-              : '#F59E0B',
-          }]} />
-          <Text style={styles.wakePillText}>
-            {wakeStatus === 'listening' ? 'Listening'
-              : wakeStatus === 'unavailable' ? 'Unavailable'
-              : 'Starting…'}
-          </Text>
-        </View>
-      </View>
-    ) : null
-  );
+  // "Hey Lucy" wake-word hint — shown ATTACHED to the floating face (so it moves with it) while the wake
+  // word is active and no conversation is open. Says "Say Hey Lucy" rather than "Listening" (which read
+  // like the mic was recording you), and replaces the old fixed top-right pill that didn't move with the face.
+  const wakeHint =
+    wakeWordEnabled && wakeStatus !== 'disabled' && !convoOpen
+      ? (wakeStatus === 'unavailable' ? 'Voice unavailable'
+        : wakeStatus === 'starting' ? 'Starting…'
+        : 'Say “Hey Lucy”')
+      : undefined;
 
   // LUCY's status, derived once and fed to the floating face below.
   const lucyStatus =
@@ -1055,10 +1043,6 @@ export default function App() {
         </View>
         {/* The conversation entry point now lives on Lucy's face itself (tap the face to talk).
             The old floating chat FAB was removed — face = talk to Lucy, bell = notifications. */}
-        {/* "Hey Lucy" wake-word status pill — pinned top-right. (The face is the floating orb below.) */}
-        <View style={styles.globalFace} pointerEvents="box-none">
-          {renderLucyFace()}
-        </View>
         {/* Camera FAB (bottom-right, where the old chat bubble was) — one-tap meal/note photo. */}
         {screen === 'dashboard' ? (
           <TouchableOpacity style={styles.cameraFab} activeOpacity={0.85} onPress={quickSnap} accessibilityLabel="Snap a photo">
@@ -1076,6 +1060,7 @@ export default function App() {
           unreadCount={0}
           celebrateKey={refreshToken}
           status={lucyStatus}
+          hint={wakeHint}
           onPress={() => { void import('./src/config/haptics').then(({ haptic }) => haptic.tab()).catch(() => {}); setConvoOpen(true); }}
         />
       ) : null}

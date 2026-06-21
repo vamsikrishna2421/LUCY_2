@@ -11,7 +11,7 @@
  * OTA. Reads/writes only via db/settings — no frozen logic edited.
  */
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, PanResponder, StyleSheet, type LayoutChangeEvent } from 'react-native';
+import { Animated, Dimensions, PanResponder, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnimatedFace, type LucyStatus } from './AnimatedFace';
 import { getDatabase } from '../db';
@@ -25,11 +25,14 @@ export function FloatingLucy({
   unreadCount = 0,
   celebrateKey,
   onPress,
+  hint,
 }: {
   status: LucyStatus;
   unreadCount?: number;
   celebrateKey?: number;
   onPress: () => void;
+  /** Small hint pill attached below the orb (e.g. "Say Hey Lucy"). Moves with the face. */
+  hint?: string;
 }) {
   const insets = useSafeAreaInsets();
   const win = Dimensions.get('window');
@@ -131,10 +134,24 @@ export function FloatingLucy({
         celebrateKey={celebrateKey}
         onPress={() => { if (!draggingRef.current) onPress(); }}
       />
+      {hint ? (
+        <View style={styles.hint} pointerEvents="none">
+          <View style={styles.hintPill}>
+            <Text style={styles.hintText} numberOfLines={1}>{hint}</Text>
+          </View>
+        </View>
+      ) : null}
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: { position: 'absolute', top: 0, left: 0, zIndex: 1000, elevation: 1000 },
+  // Absolute so it never changes the measured orb size used for edge-snapping; centered under the orb.
+  hint: { position: 'absolute', top: '100%', left: -50, right: -50, marginTop: 5, alignItems: 'center' },
+  hintPill: {
+    backgroundColor: 'rgba(12,8,18,0.92)', borderRadius: 999, borderWidth: 1,
+    borderColor: 'rgba(255,140,0,0.5)', paddingHorizontal: 9, paddingVertical: 3,
+  },
+  hintText: { color: '#F5EFE6', fontSize: 10, fontWeight: '700' },
 });
