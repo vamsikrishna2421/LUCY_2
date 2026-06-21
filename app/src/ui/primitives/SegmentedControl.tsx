@@ -78,6 +78,15 @@ export function SegmentedControl<T extends string>({
         style,
       ]}
     >
+      {/* Thin pipe dividers at each segment boundary so the options read as distinct tabs, not one
+          continuous bar. They sit behind the sliding pill (which covers the active segment's edges). */}
+      {segWidth > 0 ? options.slice(1).map((_, i) => (
+        <View
+          key={`sep-${i}`}
+          pointerEvents="none"
+          style={{ position: 'absolute', left: pad + (i + 1) * segWidth, top: '28%', bottom: '28%', width: layout.hairline, backgroundColor: colors.border }}
+        />
+      )) : null}
       {segWidth > 0 ? (
         <Animated.View
           pointerEvents="none"
