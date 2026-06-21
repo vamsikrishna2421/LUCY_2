@@ -9,13 +9,17 @@
  * mood-this-week distribution; Dr.Lucy guardian cards + disclaimer; the no-data empty state; and the
  * BodyProfileSheet. Blocking flows use a calm ActionSheet + Toast (as 1.0 did). The MoodChart/Progress
  * rings keep their exact path math per the brief.
+ *
+ * Presentation: split into two tabs — "Food" (calorie intake: energy ring, meal logging, today's meals)
+ * and "Activity" (calorie output + wellbeing: steps/sleep/HR/energy, trends, mood, Dr. Lucy) — so the
+ * activity side isn't buried below a long food scroll. Mirrors the Ask-Lucy segmented pattern.
  */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   useToast, Text, Card, Surface, Row, Stack, Spacer, Button, IconButton, Chip, TextField, ActionSheet,
-  PressableScale, useTheme, type Theme,
+  PressableScale, SegmentedControl, useTheme,
 } from '../../ui';
 import { DR_LUCY_DISCLAIMER as DR_LUCY_DISCLAIMER_TEXT } from '../../processing/drLucy';
 import { useHealth } from '../hooks/useHealth';
@@ -27,12 +31,15 @@ import type { BodyProfileRow } from '../../db/healthNutrition';
 
 const MOOD_EMOJI: Record<string, string> = { positive: '😊', excited: '⚡', calm: '😌', neutral: '😐', stressed: '😤', frustrated: '😤', negative: '😔' };
 
+type HealthTab = 'Food' | 'Activity';
+
 export function HealthView() {
   const theme = useTheme();
   const { colors, spacing } = theme;
   const toast = useToast();
   const health = useHealth();
 
+  const [tab, setTab] = useState<HealthTab>('Food');
   const [health7, setHealth7] = useState<HealthSnapshot[]>([]);
   const [mood7, setMood7] = useState<Array<{ tone: string; created_at: string }>>([]);
   const [summary, setSummary] = useState<HealthSummary | null>(null);
@@ -123,10 +130,12 @@ export function HealthView() {
   const calRemaining = summary?.remaining;
   const drLucy = summary?.drLucy ?? [];
 
-  return (
-    <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing.xl, gap: spacing.base }}>
-      {/* Today header: profile CTA OR calories ring + macros */}
-      {summary && !summary.profileComplete ? (
+  // ─── FOOD tab: calorie intake — energy ring, meal logging, today's meals ────────
+  const foodTab = (
+    <>
+      {!summary ? (
+        <Card level="surface" padding="xl" style={{ alignItems: 'center' }}><ActivityIndicator color={colors.accent} /></Card>
+      ) : !summary.profileComplete ? (
         <Card onPress={() => setShowProfile(true)} level="surface" border="accentLine" padding="lg">
           <Row gap="md" align="center">
             <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: colors.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
@@ -141,7 +150,7 @@ export function HealthView() {
           <Spacer size="sm" />
           <Text variant="footnote" color="textMuted">A few details (kept on your device) let me estimate your energy and set gentle calorie + macro goals.</Text>
         </Card>
-      ) : summary ? (
+      ) : (
         <Card level="surface" padding="lg">
           <Row justify="space-between" align="center">
             <Text variant="caption" color="accentGlow" weight="700" tracking={1.4}>TODAY'S ENERGY</Text>
@@ -182,12 +191,7 @@ export function HealthView() {
             </View>
           ) : null}
         </Card>
-      ) : (
-        <Card level="surface" padding="xl" style={{ alignItems: 'center' }}><ActivityIndicator color={colors.accent} /></Card>
       )}
-
-      {/* How you've been: mood graph */}
-      <MoodGraphCard />
 
       {/* Log a meal */}
       {summary && summary.profileComplete ? (
@@ -231,7 +235,12 @@ export function HealthView() {
           <Text variant="footnote" color="textMuted" align="center">Snap or describe a meal above and I'll keep a gentle running tally.</Text>
         </Surface>
       ) : null}
+    </>
+  );
 
+  // ─── ACTIVITY tab: calorie output + wellbeing — energy, trends, mood, Dr. Lucy ──
+  const activityTab = (
+    <>
       {/* Activity & energy */}
       <Text variant="caption" weight="700" tracking={1.4} style={{ color: TEAL }}>ACTIVITY & ENERGY</Text>
       <Row gap="sm">
@@ -271,8 +280,6 @@ export function HealthView() {
         </Surface>
       ) : null}
 
-      <WeeklyLifeWidget theme={theme} healthTip={health.healthTip} />
-
       {health7.some((h) => h.sleep_hours) ? (
         <Surface level="surfaceAlt" radius="lg" border="border" padding="md">
           <Text variant="caption" weight="700" tracking={1.4} style={{ color: '#818CF8' }}>SLEEP — LAST 7 DAYS</Text>
@@ -289,6 +296,11 @@ export function HealthView() {
           <Text variant="caption" color="textFaint" style={{ marginTop: spacing.xs }}>Goal: 8h sleep</Text>
         </Surface>
       ) : null}
+
+      {/* How you've been: mood graph + this week */}
+      <MoodGraphCard />
+
+      <WeeklyLifeWidget theme={theme} healthTip={health.healthTip} />
 
       {dominantMood ? (
         <Surface level="surfaceAlt" radius="lg" border="border" padding="md">
@@ -330,10 +342,24 @@ export function HealthView() {
           <Text variant="footnote" color="textMuted" align="center" style={{ maxWidth: 280 }}>Enable Location in Connectors to start. Steps and sleep data come from your device — no extra setup needed.</Text>
         </View>
       ) : null}
+    </>
+  );
+
+  return (
+    <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing.xl, gap: spacing.base }}>
+      <SegmentedControl<HealthTab>
+        options={[
+          { value: 'Food', label: 'Food', icon: 'restaurant-outline' },
+          { value: 'Activity', label: 'Activity', icon: 'walk-outline' },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
+
+      {tab === 'Food' ? foodTab : activityTab}
 
       <BodyProfileSheet visible={showProfile} initial={profileRow} onClose={() => setShowProfile(false)} onSaved={() => { void refreshNutrition(); }} />
       <ActionSheet visible={!!sheet} onClose={() => setSheet(null)} title={sheet?.title ?? ''} message={sheet?.message} actions={[]} cancelLabel="Got it" />
     </ScrollView>
   );
 }
-

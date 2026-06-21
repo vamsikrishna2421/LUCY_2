@@ -119,10 +119,13 @@ class PassiveListenerManager {
     this.deviceSpeechLocale = 'en-US';
     try {
       const { getDatabase } = await import('../db');
-      const { getOnDeviceSpeechLocale, getUserProfile } = await import('../db/userProfile');
+      const { getUserProfile } = await import('../db/userProfile');
+      const { resolveSupportedSpeechLocale } = await import('./transcriptionLanguage');
       const db = await getDatabase();
       const profile = await getUserProfile(db);
-      this.deviceSpeechLocale = getOnDeviceSpeechLocale(profile);
+      // Resolve to a recognizer-supported locale; unsupported languages (e.g. Telugu) fall back to
+      // regional English so Listen still transcribes instead of erroring.
+      this.deviceSpeechLocale = await resolveSupportedSpeechLocale(profile.languages);
     } catch { /* non-critical */ }
 
     // LUCY transcribes entirely on-device (Apple SFSpeechRecognizer / Android

@@ -126,20 +126,14 @@ class WakeWordListener {
     } catch { return false; }
     try {
       const { getDatabase } = await import('../db');
-      const { getUserProfile, getOnDeviceSpeechLocale } = await import('../db/userProfile');
-      this.locale = getOnDeviceSpeechLocale(await getUserProfile(await getDatabase()));
-    } catch { /* default */ }
-    try {
-      const supported = await ExpoSpeechRecognitionModule.getSupportedLocales({});
-      const installed = (supported?.installedLocales ?? []) as string[];
-      // Fall back to en-US when the profile locale isn't installed.
-      // If the list is empty the device couldn't enumerate locales (not that nothing is installed),
-      // so silently keep the current locale rather than warning or overriding unnecessarily.
-      if (installed.length > 0 && !installed.includes(this.locale)) {
-        console.warn(`[WakeWord] Locale ${this.locale} not in installedLocales; falling back to en-US`);
-        this.locale = 'en-US';
-      }
-    } catch { /* not critical */ }
+      const { getUserProfile } = await import('../db/userProfile');
+      const { resolveWakeWordLocale } = await import('../audio/transcriptionLanguage');
+      const profile = await getUserProfile(await getDatabase());
+      // The wake phrase ("hey lucy") is English, and many profile languages (e.g. Telugu te-IN) have no
+      // iOS speech model — starting with one wedged the wake word in "Starting…" and caused mishearings.
+      // Resolve to a SUPPORTED English locale (regional where possible, e.g. en-IN for Indian accents).
+      this.locale = await resolveWakeWordLocale(profile.languages);
+    } catch { /* keep default en-US */ }
 
     this.enabled = true;
     this.setStatus('starting');
@@ -266,9 +260,22 @@ class WakeWordListener {
         this.lastEventAt = Date.now();
         console.warn('[WakeWord] error:', e.error, e.message);
         this.running = false;
-        // Fatal errors — retrying won't help; mark unavailable and stop.
-        if (e.error === 'language-not-supported' || e.error === 'not-allowed') {
+        // Permission denied — retrying won't help; mark unavailable and stop.
+        if (e.error === 'not-allowed') {
           this.setStatus('unavailable');
+          return;
+        }
+        // Locale unsupported: self-heal by falling back to plain English once and retrying, rather than
+        // giving up (this is the safety net behind resolveWakeWordLocale).
+        if (e.error === 'language-not-supported') {
+          if (this.locale.toLowerCase() !== 'en-us') {
+            console.warn(`[WakeWord] ${this.locale} unsupported — falling back to en-US`);
+            this.locale = 'en-US';
+            this.setStatus('starting');
+            this.scheduleStart(600);
+          } else {
+            this.setStatus('unavailable');
+          }
           return;
         }
         // Transient errors (no-speech, network, audio-hardware, etc.): restart after a beat.

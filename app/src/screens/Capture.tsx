@@ -72,6 +72,10 @@ export function CaptureScreen({
   const toast = useToast();
   const styles = makeStyles(theme);
 
+  // Hidden per owner request: the bottom "Manage todo list" composer felt out of place on the board.
+  // Flip to true to bring it back (it holds text / photo / voice capture + the protect-this-thought row).
+  const SHOW_COMPOSER = false;
+
   const [text, setText] = useState('');
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [sending, setSending] = useState(false);
@@ -342,7 +346,8 @@ export function CaptureScreen({
         </Surface>
       ) : null}
 
-      {/* Composer dock — receipt, voice, text, send */}
+      {/* Composer dock — receipt, voice, text, send. Hidden per owner request via SHOW_COMPOSER. */}
+      {SHOW_COMPOSER ? (
       <Surface level="bg" radius="none" style={styles.composerDock}>
         {keyboardVisible ? (
           <PressableScale onPress={() => Keyboard.dismiss()} accessibilityLabel="Dismiss keyboard" style={{ alignSelf: 'flex-end' }}>
@@ -394,6 +399,7 @@ export function CaptureScreen({
           </Row>
         </PressableScale>
       </Surface>
+      ) : null}
 
       {/* Category checklist sheet */}
       <CaptureCategorySheet
@@ -408,7 +414,13 @@ export function CaptureScreen({
           setDone((prev) => [{ todo, doneAt, notes: '' }, ...prev]);
           toast.show({ message: 'Marked done', tone: 'success', actionLabel: 'Undo', onAction: () => undoDone({ todo, doneAt, notes: '' }) });
         }}
-        onEdit={(todo) => { setOpenCategory(null); setEditTodo(todo); setEditText(todo.task); }}
+        onEdit={(todo) => {
+          // Close the category sheet first, then open the edit sheet only AFTER its Modal has dismissed.
+          // Presenting a Modal while another is still dismissing makes iOS hang for several seconds — the
+          // edit box used to appear only after a long freeze. Sequencing keeps it to one Modal at a time.
+          setOpenCategory(null);
+          setTimeout(() => { setEditTodo(todo); setEditText(todo.task); }, 320);
+        }}
         onAdd={async (t) => {
           const newTodo = await capture.addTodoToList(t, openCategory?.label ?? 'General');
           if (newTodo) {

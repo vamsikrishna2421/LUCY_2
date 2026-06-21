@@ -93,8 +93,11 @@ class ConversationManager {
     }
     try {
       const { getDatabase } = await import('../db');
-      const { getUserProfile, getOnDeviceSpeechLocale } = await import('../db/userProfile');
-      this.locale = getOnDeviceSpeechLocale(await getUserProfile(await getDatabase()));
+      const { getUserProfile } = await import('../db/userProfile');
+      const { resolveSupportedSpeechLocale } = await import('../audio/transcriptionLanguage');
+      // Resolve to a locale the recognizer actually supports — unsupported languages (e.g. Telugu te-IN)
+      // otherwise failed with `language-not-supported` and broke the conversation.
+      this.locale = await resolveSupportedSpeechLocale((await getUserProfile(await getDatabase())).languages);
     } catch { /* default en-US */ }
     // Prefer on-device transcription; if the model for this locale isn't downloaded yet, this also
     // kicks off its download so the device self-heals to fully-private. Until then the OS recognizer
