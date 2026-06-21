@@ -59,4 +59,11 @@ rule. Recommendation per item:
    dedup, and passive-music knobs remain dormant. **Recommendation: preserve dormant** or drop for cleanliness —
    your call. _Interim: preserved._
 
+6. **Latent "note on completion" modal** (Capture) — 1.0 defined a "Mark as done" modal
+   (`archiveTodo` with `done: <note>`) that was UNREACHABLE (never triggered). The redesign did not invent a
+   trigger (that would add behavior 1.0 never shipped). **Recommendation: leave dormant** unless you want the
+   note-on-completion feature wired. _Interim: not wired (matches reachable 1.0)._
+7. **`getRemoteAccessState` imported but never called in Capture 1.0** — the redesign preserves this (doesn't
+   call it). **Recommendation: confirm it's a dead import** (no behavior change). _Interim: not called._
+
 Only #1 (security) is one I'd push to fix proactively. None block the redesign.
