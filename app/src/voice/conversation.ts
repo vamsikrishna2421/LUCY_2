@@ -25,8 +25,8 @@ export interface ConvoSnapshot { state: ConvoState; turns: ConvoTurn[]; partial:
 const END_RE = /\b(stop listening|stop conversation|end conversation|never mind|that'?s all|that is all|that'?s it|that is it|good ?bye|^bye$|we'?re done|i'?m done|i'?m good|all done|all set|thank you|thanks|that'?ll be all|that'?ll do)\b/i;
 
 // Close the conversation after this long with no speech from the user (hands-free auto-timeout) so it
-// never "keeps listening" forever.
-const SILENCE_MS = 11000;
+// never "keeps listening" forever. Re-armed on every speech result, so it's a pure-silence window.
+const SILENCE_MS = 5000;
 
 class ConversationManager {
   private state: ConvoState = 'off';
