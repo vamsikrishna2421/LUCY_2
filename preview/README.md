@@ -6,6 +6,8 @@ HTML files in `preview/screens/` in any browser for the live version.
 ## What's here
 | File | What it shows |
 |------|---------------|
+| `png/home-ios.png` | The **Home / Timeline** screen (first screen you see) — quick-capture, search, filter chips, mood-spine memory cards, LUCY action banner, bottom nav. iPhone. |
+| `png/home-android.png` | Home / Timeline at Android size. |
 | `png/capture-ios.png` | The redesigned **Capture** (core-loop) screen, iPhone size (390×844). |
 | `png/capture-android.png` | Same screen at Android size (412×915). |
 | `png/design-system.png` | The **design system** — colors, type scale, buttons, cards, badges, chips, segmented control, input/skeleton/toast, the LUCY orb. |

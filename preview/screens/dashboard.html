@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/><title>LUCY 2.0 — Home / Timeline</title>
+<style>
+  :root{
+    --bg:#0C0B09;--surface:#161310;--surfaceAlt:#1F1A14;--surfaceElevated:#2A2219;
+    --border:#2D2218;--divider:#1E1710;
+    --textPrimary:#F5EFE6;--textSecondary:#C4A882;--textMuted:#8A7560;--textFaint:#5C4A38;--textOnAccent:#1A0E03;
+    --accent:#FF8C42;--accentGlow:#FFA05C;--accentSoft:#3D1D08;--accentLine:#6F3515;
+    --success:#4ADE80;--warning:#F59E0B;--danger:#FB7185;--info:#60A5FA;--violet:#A78BFA;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased}
+  body{background:#000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh}
+  .screen{width:390px;height:844px;background:var(--bg);color:var(--textPrimary);display:flex;flex-direction:column;overflow:hidden;position:relative}
+  .status{height:50px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 22px 6px;position:relative;flex:0 0 auto}
+  .status .time{font-size:15px;font-weight:600}.status .right{display:flex;gap:7px;align-items:center;font-size:13px}
+  .island{position:absolute;top:9px;left:50%;transform:translateX(-50%);width:118px;height:30px;background:#000;border-radius:18px}
+  .bat{width:24px;height:12px;border:1.4px solid var(--textPrimary);border-radius:3px;position:relative}.bat i{position:absolute;inset:1.5px;width:75%;background:var(--textPrimary);border-radius:1px;display:block}.bat:after{content:'';position:absolute;right:-3px;top:3px;width:2px;height:6px;background:var(--textPrimary);border-radius:1px}
+  .hdr{padding:6px 20px 12px;flex:0 0 auto}
+  .h1{font-size:28px;font-weight:700;letter-spacing:-.5px}
+  .sub{font-size:13px;color:var(--textMuted);margin-top:2px}
+  .scroll{flex:1;overflow:hidden;padding:0 20px}
+  .qc{display:flex;gap:8px;align-items:center;background:var(--surfaceAlt);border:1px solid var(--border);border-radius:14px;padding:10px 12px}
+  .qc .ph{flex:1;color:var(--textFaint);font-size:15px}
+  .qc .ic{width:32px;height:32px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:16px;flex:0 0 32px}
+  .qc .send{background:var(--accent);color:var(--textOnAccent)}
+  .search{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:8px 12px;margin-top:10px;color:var(--textMuted);font-size:14px}
+  .chips{display:flex;gap:7px;margin-top:12px;flex-wrap:wrap}
+  .chip{font-size:12px;font-weight:600;padding:6px 12px;border-radius:999px;border:1px solid var(--border);color:var(--textSecondary);background:var(--surfaceAlt)}
+  .chip.on{background:var(--accent);color:var(--textOnAccent);border-color:var(--accent)}
+  .dateh{font-size:11px;font-weight:700;letter-spacing:1.2px;color:var(--textMuted);margin:18px 0 10px}
+  .tcard{display:flex;gap:12px;margin-bottom:10px}
+  .spine{width:8px;flex:0 0 8px;display:flex;flex-direction:column;align-items:center;padding-top:6px}
+  .dot{width:9px;height:9px;border-radius:50%}
+  .line{flex:1;width:2px;background:var(--divider);margin-top:3px}
+  .body{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:13px}
+  .meta{display:flex;align-items:center;gap:7px;margin-bottom:6px}
+  .badge{font-size:9.5px;font-weight:700;letter-spacing:.4px;padding:2px 7px;border-radius:999px;display:inline-flex;align-items:center;gap:3px}
+  .b-src{background:var(--surfaceAlt);color:var(--textMuted);border:1px solid var(--border)}
+  .b-type{background:var(--accentSoft);color:var(--accentGlow)}
+  .b-time{color:var(--textFaint);font-size:10px;margin-left:auto}
+  .ttl{font-size:15px;font-weight:600;line-height:20px}
+  .txt{font-size:13px;color:var(--textSecondary);line-height:19px;margin-top:3px}
+  .ex{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+  .exchip{font-size:11px;font-weight:600;padding:4px 9px;border-radius:8px;background:var(--surfaceAlt);border:1px solid var(--border);display:inline-flex;gap:4px;align-items:center}
+  .action{margin-top:10px;background:#3D1D0855;border:1px solid var(--accentLine);border-radius:12px;padding:10px 12px;display:flex;align-items:center;gap:10px}
+  .action .cap{font-size:10px;font-weight:700;letter-spacing:1px;color:var(--accent)}
+  .action .a{font-size:13px;font-weight:600;margin-top:1px}
+  .action .go{margin-left:auto;background:var(--accent);color:var(--textOnAccent);font-size:12px;font-weight:700;padding:7px 12px;border-radius:9px}
+  .shield{filter:blur(4px);opacity:.85}
+  /* bottom nav */
+  .nav{flex:0 0 auto;display:flex;border-top:1px solid var(--divider);background:var(--bg);padding:8px 6px 22px}
+  .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--textFaint)}
+  .tab .ti{font-size:21px}.tab .tl{font-size:10px;font-weight:600}
+  .tab.on{color:var(--accent)}
+  .homebar{position:absolute;bottom:7px;left:50%;transform:translateX(-50%);width:134px;height:5px;border-radius:3px;background:var(--textFaint);opacity:.7}
+</style></head>
+<body>
+<div class="screen">
+  <div class="status"><div class="island"></div><div class="time">9:41</div><div class="right"><span>●●●</span><span>Wi‑Fi</span><span class="bat"><i></i></span></div></div>
+  <div class="hdr"><div class="h1">Timeline</div><div class="sub">Saturday, June 21 · 5 captured today</div></div>
+
+  <div class="scroll">
+    <div class="qc">
+      <div class="ic" style="background:var(--surfaceAlt);border:1px solid var(--border);color:var(--textSecondary)">📷</div>
+      <div class="ic" style="background:var(--surfaceAlt);border:1px solid var(--border);color:var(--textSecondary)">🎙</div>
+      <div class="ph">What's on your mind…</div>
+      <div class="ic send">↑</div>
+    </div>
+    <div class="search">🔍 <span>Search your memory…</span></div>
+
+    <div class="chips">
+      <span class="chip on">All</span><span class="chip">Tasks</span><span class="chip">Ideas</span>
+      <span class="chip">Notes</span><span class="chip">Expenses</span><span class="chip">People</span>
+    </div>
+
+    <div class="dateh">TODAY</div>
+
+    <div class="tcard">
+      <div class="spine"><div class="dot" style="background:var(--accent)"></div><div class="line"></div></div>
+      <div class="body">
+        <div class="meta"><span class="badge b-src">🎙 Voice</span><span class="badge b-type">TASK</span><span class="b-time">9:12 AM</span></div>
+        <div class="ttl">Send the deck to Raghavendra by Thursday</div>
+        <div class="txt">Promised the Q3 deck before the board sync. Pull the latest numbers from finance first.</div>
+        <div class="ex"><span class="exchip">📌 deadline · Thu</span><span class="exchip">👤 Raghavendra</span><span class="exchip">💼 Work</span></div>
+        <div class="action"><div><div class="cap">LUCY CAN DO THIS</div><div class="a">Add reminder · Wed 4 PM</div></div><div class="go">Confirm</div></div>
+      </div>
+    </div>
+
+    <div class="tcard">
+      <div class="spine"><div class="dot" style="background:var(--success)"></div><div class="line"></div></div>
+      <div class="body">
+        <div class="meta"><span class="badge b-src">⌨ Text</span><span class="badge b-type">IDEA</span><span class="b-time">8:40 AM</span></div>
+        <div class="ttl">A calm streak widget for the home screen</div>
+        <div class="txt">Small, breathing — shows the capture streak without nagging. Tie it to the orb.</div>
+        <div class="ex"><span class="exchip">💡 product</span><span class="exchip">🔥 streak</span></div>
+      </div>
+    </div>
+
+    <div class="tcard">
+      <div class="spine"><div class="dot" style="background:var(--violet)"></div><div class="line"></div></div>
+      <div class="body">
+        <div class="meta"><span class="badge b-src">📷 Photo</span><span class="badge b-type">EXPENSE</span><span class="b-time">8:02 AM</span></div>
+        <div class="ttl"><span class="shield">Blue Bottle — ₹480</span> 🔒</div>
+        <div class="txt"><span class="shield">Flat white + a bag of beans. Card ending 4421.</span></div>
+        <div class="ex"><span class="exchip">☕ coffee</span><span class="exchip">₹480</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="nav">
+    <div class="tab on"><div class="ti">🏠</div><div class="tl">Timeline</div></div>
+    <div class="tab"><div class="ti">🌌</div><div class="tl">Brain</div></div>
+    <div class="tab"><div class="ti">✦</div><div class="tl">Ask</div></div>
+    <div class="tab"><div class="ti">❤</div><div class="tl">Health</div></div>
+    <div class="tab"><div class="ti">◎</div><div class="tl">Focus</div></div>
+  </div>
+  <div class="homebar"></div>
+</div>
+</body></html>
