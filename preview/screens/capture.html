@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>LUCY 2.0 — Capture</title>
+<style>
+  /* Tokens copied verbatim from app/src/ui/theme/tokens.ts */
+  :root{
+    --bg:#0C0B09; --surface:#161310; --surfaceAlt:#1F1A14; --surfaceElevated:#2A2219; --sheet:#131108;
+    --border:#2D2218; --borderSoft:#221B12; --divider:#1E1710;
+    --textPrimary:#F5EFE6; --textSecondary:#C4A882; --textMuted:#8A7560; --textFaint:#5C4A38; --textOnAccent:#1A0E03;
+    --accent:#FF8C42; --accentGlow:#FFA05C; --accentDeep:#E8722A; --accentSoft:#3D1D08; --accentLine:#6F3515;
+    --success:#4ADE80; --warning:#F59E0B; --danger:#FB7185; --info:#60A5FA;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  html,body{height:100%}
+  body{background:#000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh}
+  .screen{width:390px;height:844px;background:var(--bg);color:var(--textPrimary);position:relative;display:flex;flex-direction:column;overflow:hidden}
+  /* status bar */
+  .status{height:50px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 22px 6px;flex:0 0 auto;position:relative}
+  .status .time{font-size:15px;font-weight:600;letter-spacing:.3px}
+  .status .right{display:flex;gap:7px;align-items:center;font-size:13px;color:var(--textPrimary)}
+  .island{position:absolute;top:9px;left:50%;transform:translateX(-50%);width:118px;height:30px;background:#000;border-radius:18px}
+  .bat{width:24px;height:12px;border:1.4px solid var(--textPrimary);border-radius:3px;position:relative;opacity:.9}
+  .bat:after{content:'';position:absolute;right:-3px;top:3px;width:2px;height:6px;background:var(--textPrimary);border-radius:1px}
+  .bat i{position:absolute;inset:1.5px;width:70%;background:var(--textPrimary);border-radius:1px;display:block}
+  /* scroll body */
+  .scroll{flex:1;overflow:hidden;padding:0 0 12px}
+  .px{padding-left:20px;padding-right:20px}
+  .row{display:flex;flex-direction:row}
+  .center{align-items:center}
+  .col{display:flex;flex-direction:column}
+  /* type scale */
+  .h1{font-size:28px;line-height:34px;font-weight:700;letter-spacing:-.5px}
+  .h2{font-size:22px;line-height:28px;font-weight:600}
+  .h3{font-size:18px;line-height:24px;font-weight:600}
+  .body{font-size:16px;line-height:22px}
+  .bodyMed{font-size:16px;line-height:22px;font-weight:500}
+  .footnote{font-size:13px;line-height:18px}
+  .caption{font-size:11px;line-height:14px;font-weight:500}
+  .w7{font-weight:700}.w6{font-weight:600}
+  .accent{color:var(--accent)}.muted{color:var(--textMuted)}.faint{color:var(--textFaint)}.sec{color:var(--textSecondary)}
+  .warn{color:var(--warning)}.info{color:var(--info)}.succ{color:var(--success)}
+  .tk1{letter-spacing:1px}.tk12{letter-spacing:1.2px}.tk14{letter-spacing:1.4px}.tk08{letter-spacing:.8px}
+  /* orb */
+  .orb{width:52px;height:52px;border-radius:50%;flex:0 0 auto;position:relative;
+    background:radial-gradient(circle at 36% 30%, #FFB877, #FF8C42 52%, #B8551B 100%);
+    box-shadow:0 0 20px rgba(255,140,66,.45), inset 0 -7px 14px rgba(0,0,0,.30), inset 0 4px 8px rgba(255,200,150,.30)}
+  .orb .eye{position:absolute;top:21px;width:5px;height:7px;border-radius:3px;background:#2A1205}
+  .orb .eye.l{left:16px}.orb .eye.r{right:16px}
+  .orb .smile{position:absolute;top:31px;left:50%;transform:translateX(-50%);width:16px;height:8px;border:2px solid #2A1205;border-top:0;border-radius:0 0 16px 16px}
+  /* card */
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px}
+  .card.alt{background:var(--surfaceAlt)}
+  .card.accentline{border-color:var(--accentLine)}
+  .divider{height:1px;background:var(--divider);width:100%}
+  .stat .v{font-size:22px;line-height:26px;font-weight:700}
+  .stat .l{font-size:11px;font-weight:600;color:var(--textMuted);letter-spacing:.5px}
+  /* glance */
+  .glance{display:flex;gap:12px;margin-top:12px}
+  .glance .card{flex:1 1 0;min-width:0;overflow:hidden;padding:12px}
+  .ic{font-size:15px;line-height:1}
+  /* category card */
+  .cat{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:8px;border-left-width:4px;display:flex;align-items:center;gap:16px}
+  .cat .emoji{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;flex:0 0 auto}
+  .badge{display:inline-flex;align-items:center;background:var(--accent);color:var(--textOnAccent);font-size:10px;font-weight:700;letter-spacing:.4px;padding:2px 7px;border-radius:999px}
+  .chev{color:var(--textFaint);font-size:20px;margin-left:auto}
+  /* float automation card */
+  .float{margin:0 16px 8px;background:var(--surfaceAlt);border:1px solid var(--accentLine);border-radius:24px;padding:16px;box-shadow:0 4px 16px rgba(255,140,66,.15)}
+  .btn{height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;flex:1}
+  .btn.primary{background:var(--accent);color:var(--textOnAccent)}
+  .btn.ghost{background:transparent;color:var(--accent);flex:0 0 auto;padding:0 18px}
+  /* dock */
+  .dock{flex:0 0 auto;border-top:1px solid var(--divider);background:var(--bg);padding:8px 16px 10px}
+  .dockrow{display:grid;grid-template-columns:46px 46px 1fr 46px;gap:8px;align-items:end}
+  .iconbtn{width:46px;height:46px;border-radius:999px;display:flex;align-items:center;justify-content:center;flex:0 0 46px;font-size:20px}
+  .iconbtn.sec{background:var(--surfaceAlt);border:1px solid var(--border);color:var(--textSecondary)}
+  .iconbtn.primary{background:var(--accent);color:var(--textOnAccent)}
+  .mic{width:46px;height:46px;border-radius:999px;background:var(--surfaceAlt);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--textSecondary);font-size:20px;flex:0 0 46px}
+  .field{flex:1 1 0;min-width:0;background:var(--surfaceAlt);border:1px solid var(--border);border-radius:12px;min-height:46px;display:flex;align-items:center;padding:0 14px;color:var(--textFaint);font-size:16px}
+  .protect{display:flex;gap:8px;align-items:center;margin-top:8px}
+  .checkbox{width:19px;height:19px;border-radius:8px;border:1px solid var(--textMuted);flex:0 0 auto}
+  .homebar{position:absolute;bottom:7px;left:50%;transform:translateX(-50%);width:134px;height:5px;border-radius:3px;background:var(--textFaint);opacity:.8}
+  .gap8{gap:8px}.gap12{gap:12px}.gap16{gap:16px}.gap24{gap:24px}
+  .mt12{margin-top:12px}.mt16{margin-top:16px}.mb8{margin-bottom:8px}
+</style></head>
+<body>
+<div class="screen">
+  <div class="status">
+    <div class="island"></div>
+    <div class="time">9:41</div>
+    <div class="right"><span>●●●</span><span>Wi‑Fi</span><span class="bat"><i></i></span></div>
+  </div>
+
+  <div class="scroll">
+    <!-- Hero -->
+    <div class="px" style="padding-top:16px">
+      <div class="row center gap16">
+        <div class="orb"><span class="eye l"></span><span class="eye r"></span><span class="smile"></span></div>
+        <div style="flex:1">
+          <div class="footnote w7 accent">Good morning, Vamsi</div>
+          <div class="h1">LUCY</div>
+        </div>
+      </div>
+
+      <div class="card alt accentline mt16">
+        <div class="caption w7 accent tk12">LUCY IS ACTIVE</div>
+        <div class="h3" style="margin-top:4px">2 urgent signals for you</div>
+        <div class="divider" style="margin:12px 0"></div>
+        <div class="row gap24">
+          <div class="stat col"><div class="v accent">5</div><div class="l">today</div></div>
+          <div class="stat col"><div class="v warn">4🔥</div><div class="l">day streak</div></div>
+          <div class="stat col"><div class="v info">7</div><div class="l">tasks</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Glance -->
+    <div class="px glance">
+      <div class="card alt">
+        <div class="row gap8" style="align-items:flex-start">
+          <span class="ic info">📅</span>
+          <div style="flex:1">
+            <div class="caption w7 muted tk08">NEXT UP</div>
+            <div class="footnote w7">Team standup</div>
+            <div class="caption muted">Today 9:00 AM</div>
+          </div>
+        </div>
+      </div>
+      <div class="card alt">
+        <div class="row gap8" style="align-items:flex-start">
+          <span class="ic accent">⚡</span>
+          <div style="flex:1">
+            <div class="caption w7 muted tk08">TOP TASK</div>
+            <div class="footnote w7">Send the deck to Raghavendra by Thu</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Board -->
+    <div class="px" style="padding-top:16px">
+      <div class="cat" style="border-left-color:#FF8C42">
+        <div class="emoji" style="background:#FF8C4222">💼</div>
+        <div style="flex:1">
+          <div class="row center gap8"><span class="bodyMed">Work</span><span class="badge">1 URGENT</span></div>
+          <div class="footnote muted">Send the deck to Raghavendra by Thu</div>
+          <div class="caption faint">3 items</div>
+        </div>
+        <span class="chev">›</span>
+      </div>
+      <div class="cat" style="border-left-color:#60A5FA">
+        <div class="emoji" style="background:#60A5FA22">🏠</div>
+        <div style="flex:1">
+          <div class="bodyMed">Personal</div>
+          <div class="footnote muted">Book dentist appointment</div>
+          <div class="caption faint">2 items</div>
+        </div>
+        <span class="chev">›</span>
+      </div>
+      <div class="cat" style="border-left-color:#A78BFA">
+        <div class="emoji" style="background:#A78BFA22">💡</div>
+        <div style="flex:1">
+          <div class="bodyMed">Ideas</div>
+          <div class="footnote muted">App: a calm widget for the streak</div>
+          <div class="caption faint">1 item</div>
+        </div>
+        <span class="chev">›</span>
+      </div>
+      <div class="cat" style="border-left-color:#4ADE80">
+        <div class="emoji" style="background:#4ADE8022">🛒</div>
+        <div style="flex:1">
+          <div class="bodyMed">Errands</div>
+          <div class="footnote muted">Pick up dry cleaning</div>
+          <div class="caption faint">1 item</div>
+        </div>
+        <span class="chev">›</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Composer dock -->
+  <div class="dock">
+    <div class="dockrow">
+      <div class="iconbtn sec">▣</div>
+      <div class="mic">🎙</div>
+      <div class="field">Manage todo list</div>
+      <div class="iconbtn primary">↑</div>
+    </div>
+    <div class="protect">
+      <div class="checkbox"></div>
+      <div style="flex:1">
+        <div class="footnote w6">Protect this thought</div>
+        <div class="caption muted">Kept on-device, never sent to the cloud.</div>
+      </div>
+      <span class="faint">🔒</span>
+    </div>
+  </div>
+
+  <div class="homebar"></div>
+</div>
+</body></html>

@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/>
+<title>LUCY 2.0 — Design System</title>
+<style>
+  :root{
+    --bg:#0C0B09; --surface:#161310; --surfaceAlt:#1F1A14; --surfaceElevated:#2A2219;
+    --border:#2D2218; --divider:#1E1710;
+    --textPrimary:#F5EFE6; --textSecondary:#C4A882; --textMuted:#8A7560; --textFaint:#5C4A38; --textOnAccent:#1A0E03;
+    --accent:#FF8C42; --accentGlow:#FFA05C; --accentDeep:#E8722A; --accentSoft:#3D1D08; --accentLine:#6F3515;
+    --success:#4ADE80; --warning:#F59E0B; --danger:#FB7185; --info:#60A5FA; --violet:#A78BFA;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased}
+  body{background:var(--bg);color:var(--textPrimary);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;width:390px;padding:24px 20px 32px}
+  h2{font-size:11px;font-weight:700;letter-spacing:1.4px;color:var(--accent);margin:26px 0 12px}
+  .title{font-size:28px;font-weight:700;letter-spacing:-.5px}
+  .sub{font-size:13px;color:var(--textMuted);margin-top:4px}
+  .swatch-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .sw{height:56px;border-radius:12px;border:1px solid var(--border);position:relative;overflow:hidden}
+  .sw span{position:absolute;bottom:4px;left:6px;font-size:9px;font-weight:600;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+  .type div{margin-bottom:8px}
+  .display{font-size:34px;line-height:40px;font-weight:700;letter-spacing:-.5px}
+  .h1{font-size:28px;line-height:34px;font-weight:700}
+  .h2t{font-size:22px;line-height:28px;font-weight:600}
+  .h3{font-size:18px;line-height:24px;font-weight:600}
+  .body{font-size:16px;line-height:22px}
+  .footnote{font-size:13px;color:var(--textSecondary)}
+  .caption{font-size:11px;color:var(--textMuted);letter-spacing:.5px}
+  .rowwrap{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .btn{height:46px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;padding:0 22px}
+  .btn.primary{background:var(--accent);color:var(--textOnAccent)}
+  .btn.secondary{background:var(--surfaceAlt);color:var(--textPrimary);border:1px solid var(--border)}
+  .btn.ghost{background:transparent;color:var(--accent)}
+  .btn.danger{background:var(--danger);color:#2A0A10}
+  .iconbtn{width:46px;height:46px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:20px}
+  .iconbtn.primary{background:var(--accent);color:var(--textOnAccent)}
+  .iconbtn.sec{background:var(--surfaceAlt);border:1px solid var(--border);color:var(--textSecondary)}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:10px}
+  .card.alt{background:var(--surfaceAlt)}
+  .card.accentline{border-color:var(--accentLine)}
+  .badge{display:inline-flex;align-items:center;font-size:10px;font-weight:700;letter-spacing:.4px;padding:3px 9px;border-radius:999px}
+  .b-accent{background:var(--accent);color:var(--textOnAccent)}
+  .b-succ{background:var(--success);color:#06310F}
+  .b-warn{background:var(--warning);color:#3A2503}
+  .b-dang{background:var(--danger);color:#2A0A10}
+  .b-info{background:var(--info);color:#06223F}
+  .chip{display:inline-flex;align-items:center;font-size:13px;font-weight:600;padding:7px 14px;border-radius:999px;border:1px solid var(--border);color:var(--textSecondary);background:var(--surfaceAlt)}
+  .chip.sel{background:var(--accent);color:var(--textOnAccent);border-color:var(--accent)}
+  .seg{display:flex;background:var(--surfaceAlt);border:1px solid var(--border);border-radius:12px;padding:4px;gap:4px;width:100%}
+  .seg div{flex:1;text-align:center;font-size:14px;font-weight:600;padding:8px 0;border-radius:9px;color:var(--textMuted)}
+  .seg div.on{background:var(--accent);color:var(--textOnAccent)}
+  .field{background:var(--surfaceAlt);border:1px solid var(--border);border-radius:12px;min-height:46px;display:flex;align-items:center;padding:0 14px;color:var(--textFaint);font-size:16px}
+  .skel{background:linear-gradient(90deg,var(--surfaceAlt) 25%,#27201880 50%,var(--surfaceAlt) 75%);border-radius:8px;height:12px;margin-bottom:8px}
+  .orb{width:56px;height:56px;border-radius:50%;position:relative;background:radial-gradient(circle at 36% 30%, #FFB877, #FF8C42 52%, #B8551B 100%);box-shadow:0 0 22px rgba(255,140,66,.5), inset 0 -7px 14px rgba(0,0,0,.30)}
+  .orb .e{position:absolute;top:23px;width:5px;height:7px;border-radius:3px;background:#2A1205}.orb .e.l{left:18px}.orb .e.r{right:18px}
+  .orb .s{position:absolute;top:33px;left:50%;transform:translateX(-50%);width:16px;height:8px;border:2px solid #2A1205;border-top:0;border-radius:0 0 16px 16px}
+  .toast{display:flex;align-items:center;gap:10px;background:var(--surfaceElevated);border:1px solid var(--border);border-radius:14px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+  .toast .ck{width:22px;height:22px;border-radius:999px;background:#4ADE8022;color:var(--success);display:flex;align-items:center;justify-content:center;font-size:13px}
+</style></head>
+<body>
+  <div class="title">LUCY 2.0</div>
+  <div class="sub">Design system — premium dark, warm amber intelligence. Calm, self-evident, comforting.</div>
+
+  <h2>COLOR — SURFACES</h2>
+  <div class="swatch-grid">
+    <div class="sw" style="background:#0C0B09"><span>bg</span></div>
+    <div class="sw" style="background:#161310"><span>surface</span></div>
+    <div class="sw" style="background:#1F1A14"><span>surfaceAlt</span></div>
+    <div class="sw" style="background:#2A2219"><span>elevated</span></div>
+  </div>
+  <h2>COLOR — ACCENT &amp; SEMANTIC</h2>
+  <div class="swatch-grid">
+    <div class="sw" style="background:#FF8C42"><span>accent</span></div>
+    <div class="sw" style="background:#FFA05C"><span>glow</span></div>
+    <div class="sw" style="background:#E8722A"><span>deep</span></div>
+    <div class="sw" style="background:#3D1D08"><span>soft</span></div>
+    <div class="sw" style="background:#4ADE80"><span>success</span></div>
+    <div class="sw" style="background:#F59E0B"><span>warning</span></div>
+    <div class="sw" style="background:#FB7185"><span>danger</span></div>
+    <div class="sw" style="background:#60A5FA"><span>info</span></div>
+  </div>
+
+  <h2>TYPOGRAPHY</h2>
+  <div class="type">
+    <div class="display">Display 34</div>
+    <div class="h1">Heading 1 · 28</div>
+    <div class="h2t">Heading 2 · 22</div>
+    <div class="h3">Heading 3 · 18</div>
+    <div class="body">Body 16 — the warm cream reading color on deep ink.</div>
+    <div class="footnote">Footnote 13 — secondary tan.</div>
+    <div class="caption">CAPTION 11 · MUTED</div>
+  </div>
+
+  <h2>BUTTONS</h2>
+  <div class="rowwrap">
+    <span class="btn primary">Primary</span>
+    <span class="btn secondary">Secondary</span>
+    <span class="btn ghost">Ghost</span>
+  </div>
+  <div class="rowwrap" style="margin-top:10px">
+    <span class="btn danger">Danger</span>
+    <span class="iconbtn primary">↑</span>
+    <span class="iconbtn sec">🎙</span>
+    <span class="iconbtn sec">▣</span>
+  </div>
+
+  <h2>CARDS</h2>
+  <div class="card"><div class="h3">Surface card</div><div class="footnote" style="margin-top:4px">Default card on the base surface.</div></div>
+  <div class="card alt accentline"><div class="caption" style="color:var(--accent);font-weight:700;letter-spacing:1.2px">LUCY IS ACTIVE</div><div class="h3" style="margin-top:4px">Accent-lined card</div></div>
+
+  <h2>BADGES &amp; CHIPS</h2>
+  <div class="rowwrap">
+    <span class="badge b-accent">URGENT</span>
+    <span class="badge b-succ">DONE</span>
+    <span class="badge b-warn">DUE</span>
+    <span class="badge b-dang">OVERDUE</span>
+    <span class="badge b-info">NEW</span>
+  </div>
+  <div class="rowwrap" style="margin-top:10px">
+    <span class="chip sel">All</span><span class="chip">Work</span><span class="chip">Personal</span><span class="chip">Ideas</span>
+  </div>
+
+  <h2>SEGMENTED CONTROL</h2>
+  <div class="seg"><div class="on">Timeline</div><div>Brain</div><div>Ask</div></div>
+
+  <h2>INPUT · SKELETON · TOAST</h2>
+  <div class="field" style="margin-bottom:12px">Manage todo list</div>
+  <div class="card"><div class="skel" style="width:60%"></div><div class="skel" style="width:90%"></div><div class="skel" style="width:75%"></div></div>
+  <div class="toast"><span class="ck">✓</span><div style="flex:1"><div style="font-size:14px;font-weight:600">Got it ✓</div></div><span style="color:var(--accent);font-weight:700;font-size:13px">Undo</span></div>
+
+  <h2>LUCY ORB</h2>
+  <div class="rowwrap"><div class="orb"><span class="e l"></span><span class="e r"></span><span class="s"></span></div>
+    <div class="footnote" style="flex:1">A breathing amber orb — LUCY's presence across capture, listening, and thinking states.</div></div>
+</body></html>
