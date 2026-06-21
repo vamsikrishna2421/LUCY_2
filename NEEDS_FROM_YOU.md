@@ -66,4 +66,9 @@ rule. Recommendation per item:
 7. **`getRemoteAccessState` imported but never called in Capture 1.0** — the redesign preserves this (doesn't
    call it). **Recommendation: confirm it's a dead import** (no behavior change). _Interim: not called._
 
+8. **Galaxy rename/add was broken on Android** (real bug — ALREADY FIXED) — 1.0 used iOS-only `Alert.prompt`,
+   which silently no-ops on Android (Android users could not rename or add brain topics). The redesign replaced
+   it with a cross-platform BottomSheet + TextField. Logic unchanged; this RESTORES the intended feature on
+   Android. Adjudicated as a real bug and applied. Tell me if you'd rather keep iOS-only behavior.
+
 Only #1 (security) is one I'd push to fix proactively. None block the redesign.

@@ -23,7 +23,7 @@ metrics dashboard) that 1.0 lacked. Ship something **real and runnable**, not va
 | 1 Seam report + interface contract | architect | ✅ `docs/04_SEAM_REPORT.md` — redesign safe, zero logic edits |
 | 2 IA / flows | orchestrator+UX | 🔜 |
 | 3 Design system (code) | design agent | ✅ `app/src/ui/` (34 primitives + motion/layout/theme) |
-| 4 Build | engineers | ⏳ billing+telemetry **integrated into App.tsx, 0 tsc errors**; dashboard running; screen redesign (F) next |
+| 4 Build | engineers | ⏳ design-system+monetization+monitoring integrated (0 tsc); web dashboard done; **7 screens redesigned** (Capture, Ask, Settings, Galaxy, Connectors, Story, Notifications) + iOS/Android audit (render tests 16/16); **Dashboard screen** in progress |
 | 5 QA (parity + constraints) | QA agent | 🔜 |
 
 ## Workstreams (parallel)
@@ -60,3 +60,14 @@ metrics dashboard) that 1.0 lacked. Ship something **real and runnable**, not va
 - Model eval framed (docs/11): cost objective = least $/mo + most accurate at 600 extractions/mo;
   Haiku ~$2.70 vs Sonnet ~$8.10 per user/mo; live accuracy benchmark in progress.
 - Installing native deps (react-native-purchases, @sentry/react-native, posthog-react-native) for integration.
+- 2026-06-21 (cont.): native deps installed + providers wired into App.tsx (ThemeProvider, ToastProvider,
+  EntitlementProvider, PaywallController, telemetry init, ErrorBoundary→Sentry). 0 tsc errors. Web dashboard
+  committed. Feature Catalog locked (470 rows). Model eval done (Haiku default). Frozen-logic parity baseline
+  26/26. Owner provided Anthropic test key + Apple creds + EAS cached; budget cap ~$10 on the key (UI work
+  uses $0). Build config set for TestFlight-on-existing-app (v2.0.0 / build 2.0.0 / vc105).
+- 2026-06-21 (cont.): Capture+Ask redesigned (Workstream F core loop). Visual preview generated
+  (preview/png + html, headless Edge from real tokens) and committed for owner review.
+- 2026-06-21 (cont.): 5 more screens redesigned (Settings decomposed, Galaxy, Connectors, Story,
+  Notifications) + iOS/Android audit fixes (keyboard, Android back, LucyOrb Android gradient bug, dynamic-type
+  cap) + render-test harness (16/16). Galaxy Alert.prompt→sheet adjudicated as real bug (Android), applied.
+  Dashboard (4058 ln, the home screen) dispatched to screens2 for a dedicated single-pass redesign.
