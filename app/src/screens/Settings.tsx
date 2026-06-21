@@ -21,7 +21,7 @@ import { useState } from 'react';
 import { Alert, Linking, Platform, ScrollView, View } from 'react-native';
 import { shareAsync } from 'expo-sharing';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ToastProvider, useToast, Text, Row, Stack, Spacer, Button, BottomSheet, useTheme } from '../ui';
+import { useToast, Text, Row, Stack, Spacer, Button, BottomSheet, useTheme } from '../ui';
 import { config } from '../config';
 import { getDatabase } from '../db';
 import { DevLogViewer } from '../components/DevLogViewer';
@@ -67,15 +67,9 @@ function panelTitle(panel: SettingsPanel): string {
   }
 }
 
-export function SettingsScreen(props: SettingsScreenProps) {
-  return (
-    <ToastProvider>
-      <SettingsInner {...props} />
-    </ToastProvider>
-  );
-}
-
-function SettingsInner({
+// ToastProvider is mounted once at the app root (App.tsx); `useToast` resolves there. Settings is
+// always rendered under that root, so no local provider is needed.
+export function SettingsScreen({
   backgroundEnabled, refreshToken, onChangeBackground, onReprocessAll, onOpenWrapped,
   wakeWordEnabled, onChangeWakeWord, onStartTour,
 }: SettingsScreenProps) {

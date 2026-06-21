@@ -17,7 +17,7 @@
 import { Alert, ScrollView, Switch, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  ToastProvider, useToast, Text, Card, Surface, Row, Stack, Spacer, Divider, useTheme, type Theme,
+  useToast, Text, Card, Surface, Row, Stack, Spacer, Divider, useTheme, type Theme,
 } from '../ui';
 import { useConnectors, type ConnectorId } from './hooks/useConnectors';
 
@@ -111,15 +111,9 @@ const CONFIGS: ConnectorConfig[] = [
   },
 ];
 
+// ToastProvider is mounted once at the app root (App.tsx), so `useToast` resolves there — no local
+// provider needed (this screen is always rendered under that root, incl. inside Settings' panel).
 export function ConnectorsScreen() {
-  return (
-    <ToastProvider>
-      <ConnectorsInner />
-    </ToastProvider>
-  );
-}
-
-function ConnectorsInner() {
   const theme = useTheme();
   const { colors, spacing } = theme;
   const toast = useToast();
