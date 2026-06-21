@@ -67,14 +67,6 @@ export function DashboardScreen({ refreshToken, onAskAbout, requestedView, reque
   const views: ViewMode[] = ['Timeline', 'Focus Now', 'Ask Lucy', 'Health'];
   const viewOptions = views.map((v) => ({ value: v, label: v, icon: VIEW_ICON[v] }));
 
-  // Lucy "speaks" — a warm, reactive greeting that mirrors the day's state. The breathing orb is the
-  // global overlay (App.tsx) that sits in this hero's top-right, so the copy reads as her voice.
-  const heroLine = pendingTodos.length
-    ? `I'm holding ${pendingTodos.length} open task${pendingTodos.length === 1 ? '' : 's'} for you — tap Focus Now when you're ready.`
-    : captures.length
-      ? "You're all caught up. I'll keep watch and tidy things quietly."
-      : 'Hold the mic or snap anything — I\'ll organize what matters.';
-
   return (
     <View style={{ flex: 1, paddingHorizontal: dsTokens.spacing.base, paddingTop: dsTokens.spacing.sm }}>
       {/* On Workspace (Brain) the greeting + view tabs are hidden so its own command-center header shows
@@ -84,7 +76,6 @@ export function DashboardScreen({ refreshToken, onAskAbout, requestedView, reque
           <Stack gap="xxs" style={{ marginBottom: dsTokens.spacing.md }}>
             <DsText variant="footnote" color="accent" weight="700">{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</DsText>
             <DsText variant="h1" numberOfLines={1}>{greetingForHour(new Date().getHours())}{userName ? `, ${userName}` : ''}</DsText>
-            <DsText variant="footnote" color="textMuted" numberOfLines={2}>{heroLine}</DsText>
           </Stack>
           <DsSegmentedControl options={viewOptions} value={view} onChange={setView} style={{ marginBottom: dsTokens.spacing.md }} />
         </>

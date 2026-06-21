@@ -11,7 +11,7 @@
 import React, { useEffect, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Text, Card, Row, Stack, PressableScale, useTheme } from '../../ui';
+import { Text, Card, Row, Stack, PressableScale, BottomSheet, Button, useTheme } from '../../ui';
 import { PrivacyBadge } from '../../components/PrivacyBadge';
 import { WorkspaceHome } from '../../components/WorkspaceHome';
 import { DocumentsTab } from '../../components/DocumentsTab';
@@ -39,11 +39,11 @@ export type LibraryTab =
   | 'Expenses' | 'Goals' | 'People' | 'Meetings' | 'Listen' | 'Reminders' | 'Gallery' | 'Medications';
 
 /** A simple deletable list row (Todos/Ideas/Expenses) — the redesigned 1.0 `Card`. */
-function ListCard({ title, detail, privacy, onDelete }: { title: string; detail: string; privacy?: 'private' | 'local' | 'normal'; onDelete?: () => void }) {
+function ListCard({ title, detail, privacy, onDelete, onPress }: { title: string; detail: string; privacy?: 'private' | 'local' | 'normal'; onDelete?: () => void; onPress?: () => void }) {
   const { colors, spacing } = useTheme();
   const lib = useLibrary();
   return (
-    <Card level="surfaceAlt" padding="md" style={{ marginBottom: spacing.sm }}>
+    <Card level="surfaceAlt" padding="md" onPress={onPress} style={{ marginBottom: spacing.sm }}>
       <Row gap="sm" align="flex-start">
         <Text variant="footnote" weight="600" style={{ flex: 1 }}>{lib.protectedPreview(title)}</Text>
         {privacy ? <PrivacyBadge level={privacy} /> : null}
@@ -74,6 +74,7 @@ export function LibraryView({
   const [todos, setTodos] = useState(initialTodos);
   const [ideas, setIdeas] = useState(initialIdeas);
   const [expenses, setExpenses] = useState(initialExpenses);
+  const [openIdea, setOpenIdea] = useState<IdeaRow | null>(null);
 
   useEffect(() => { setTodos(initialTodos); }, [initialTodos]);
   useEffect(() => { setIdeas(initialIdeas); }, [initialIdeas]);
@@ -119,7 +120,7 @@ export function LibraryView({
       {BackBar}
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing.xl }}>
         {tab === 'Todos' ? todos.map((item) => <ListCard key={item.id} title={item.task} detail={`${item.category} / ${item.urgency} / ${item.status}`} privacy={item.privacy_level} onDelete={() => void removeTodo(item.id)} />) : null}
-        {tab === 'Ideas' ? ideas.map((item) => <ListCard key={item.id} title={item.title} detail={item.description} privacy={item.privacy_level} onDelete={() => void removeIdea(item.id)} />) : null}
+        {tab === 'Ideas' ? ideas.map((item) => <ListCard key={item.id} title={item.title} detail={item.description} privacy={item.privacy_level} onPress={() => setOpenIdea(item)} onDelete={() => void removeIdea(item.id)} />) : null}
         {tab === 'Expenses' ? expenses.map((item) => <ListCard key={item.id} title={`${item.amount ?? '-'} - ${item.description}`} detail={item.category} privacy={item.privacy_level} onDelete={() => void removeExpense(item.id)} />) : null}
         {tab === 'People' ? <PeopleTab /> : null}
         {tab === 'Resources' ? <ResourcesTab /> : null}
@@ -129,6 +130,27 @@ export function LibraryView({
         {tab === 'Gallery' ? <GalleryTab /> : null}
         {tab === 'Medications' ? <MedicationsTab /> : null}
       </ScrollView>
+
+      {/* Idea detail — tap an idea to read it in full (its description holds any LLM elaboration), with a
+          clear Done dismiss. */}
+      <BottomSheet visible={openIdea !== null} onClose={() => setOpenIdea(null)} title="Idea">
+        {openIdea ? (
+          <Stack gap="base">
+            <Text variant="h3">{lib.protectedPreview(openIdea.title)}</Text>
+            <Row gap="sm" align="center">
+              <Text variant="caption" color="accent" weight="700" tracking={1}>{openIdea.type.toUpperCase()}</Text>
+              {openIdea.privacy_level ? <PrivacyBadge level={openIdea.privacy_level} /> : null}
+              <Text variant="caption" color="textMuted">{new Date(openIdea.created_at).toLocaleDateString()}</Text>
+            </Row>
+            <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator>
+              <Text variant="body" color="textSecondary">
+                {lib.protectedPreview(openIdea.description) || 'No additional detail captured for this idea yet.'}
+              </Text>
+            </ScrollView>
+            <Button label="Done" variant="secondary" onPress={() => setOpenIdea(null)} />
+          </Stack>
+        ) : null}
+      </BottomSheet>
     </View>
   );
 }

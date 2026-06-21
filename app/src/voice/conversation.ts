@@ -24,8 +24,10 @@ export interface ConvoSnapshot { state: ConvoState; turns: ConvoTurn[]; partial:
 // Spoken phrases that end the conversation. Kept conservative so normal mid-chat words don't end it.
 const END_RE = /\b(stop listening|stop conversation|end conversation|never mind|that'?s all|that is all|that'?s it|that is it|good ?bye|^bye$|we'?re done|i'?m done|i'?m good|all done|all set|thank you|thanks|that'?ll be all|that'?ll do)\b/i;
 
-// Close the conversation after this long with no speech from the user (hands-free auto-timeout) so it
-// never "keeps listening" forever. Re-armed on every speech result, so it's a pure-silence window.
+// How long to wait after the user goes quiet. If they HAD said something, we treat the pause as
+// end-of-turn and ANSWER; if they said nothing, we close the conversation. Re-armed on every speech
+// result, so it's a pure-pause window. (iOS endpointing with continuous:false usually answers sooner;
+// this is the backstop + the idle auto-close.)
 const SILENCE_MS = 5000;
 
 class ConversationManager {
@@ -73,9 +75,17 @@ class ConversationManager {
   private armSilence(): void {
     if (this.silenceTimer) clearTimeout(this.silenceTimer);
     this.silenceTimer = setTimeout(() => {
-      // User went quiet — close the conversation without speaking (so we don't reopen the mic). This is
-      // what stops "it kept listening and never stopped".
-      if (this.active) void this.end();
+      if (!this.active || this.state !== 'listening') return;
+      const pending = this.partial.trim();
+      if (pending) {
+        // The user spoke and then paused — treat the pause as end-of-turn and ANSWER (do NOT close). This
+        // is the "stop listening and speak back to me" behaviour the owner expected.
+        this.partial = '';
+        void this.handleUtterance(pending);
+      } else {
+        // Nothing was said — close the conversation calmly.
+        void this.end();
+      }
     }, SILENCE_MS);
   }
   private clearSilence(): void {
@@ -193,7 +203,10 @@ class ConversationManager {
       ExpoSpeechRecognitionModule.start({
         lang: this.locale,
         interimResults: true,
-        continuous: true,
+        // continuous:false → iOS detects end-of-speech and finalises the utterance when the user pauses,
+        // so LUCY answers right after you stop talking (continuous:true never finalised on a pause, so it
+        // just sat listening until the timer — it "never answered, then closed").
+        continuous: false,
         // Do NOT force on-device recognition. On iOS the on-device model is only installed for some
         // locales (typically en-US) — forcing it for e.g. en-IN (what a Telugu+English profile resolves
         // to) silently captured nothing, so the conversation "never listened". Letting the OS recognizer
