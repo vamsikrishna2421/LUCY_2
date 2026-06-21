@@ -101,6 +101,18 @@ export function DocumentsTab() {
     ]);
   };
 
+  // Share the document via the native share sheet (WhatsApp, Mail, AirDrop, …).
+  const share = async (it: VaultItem) => {
+    const uri = bigImg || it.file_path || it.thumb;
+    if (!uri) { Alert.alert('Nothing to share', 'This document has no file to share yet.'); return; }
+    try {
+      const Sharing = await import('expo-sharing');
+      if (!(await Sharing.isAvailableAsync())) { Alert.alert('Sharing unavailable', "This device can't open the share sheet."); return; }
+      const mimeType = /\.pdf(\?|$)/i.test(uri) ? 'application/pdf' : 'image/jpeg';
+      await Sharing.shareAsync(uri, { mimeType, dialogTitle: it.title || 'Share document' });
+    } catch (e) { Alert.alert('Could not share', e instanceof Error ? e.message : 'Please try again.'); }
+  };
+
   if (loading) return <View style={styles.center}><ActivityIndicator color={LUCY_COLORS.primary} /></View>;
 
   return (
@@ -177,6 +189,7 @@ export function DocumentsTab() {
                   </View>
                 ) : null}
                 <View style={styles.actions}>
+                  <TouchableOpacity style={[styles.actBtn, styles.shareBtn]} onPress={() => share(selected)}><Text style={[styles.actText, { color: '#fff' }]}>Share</Text></TouchableOpacity>
                   <TouchableOpacity style={styles.actBtn} onPress={() => refile(selected)}><Text style={styles.actText}>Move</Text></TouchableOpacity>
                   <TouchableOpacity style={[styles.actBtn, styles.delBtn]} onPress={() => remove(selected)}><Text style={[styles.actText, { color: LUCY_COLORS.error }]}>Delete</Text></TouchableOpacity>
                 </View>
@@ -226,5 +239,6 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', gap: 10, marginTop: 18, marginBottom: 10 },
   actBtn: { flex: 1, backgroundColor: LUCY_COLORS.surfaceRaised, borderRadius: 12, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: LUCY_COLORS.border },
   delBtn: { borderColor: LUCY_COLORS.error },
+  shareBtn: { backgroundColor: LUCY_COLORS.primary, borderColor: LUCY_COLORS.primary },
   actText: { color: LUCY_COLORS.textDark, fontWeight: '700', fontSize: 14 },
 });
