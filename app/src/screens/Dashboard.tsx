@@ -31,8 +31,7 @@ import { MoneyGoals } from '../components/MoneyGoals';
 import { WorkspaceHome } from '../components/WorkspaceHome';
 import { AskScreen } from './Ask';
 import { Ionicons } from '@expo/vector-icons';
-import { SegmentedControl, type SegmentOption } from '../components/SegmentedControl';
-import { ActionSheet, Toast, type SheetAction } from '../components/ActionSheet';
+import { ActionSheet, Toast } from '../components/ActionSheet';
 import { LucyEmptyState } from '../components/LucyEmptyState';
 import { CommitmentsSection } from '../components/CommitmentsSection';
 
@@ -55,8 +54,14 @@ import Svg, {
 import type { MoodGraph as MoodGraphT, MoodPoint as MoodPointT, DayHighlight as DayHighlightT } from '../processing/moodGraph';
 import { DR_LUCY_DISCLAIMER as DR_LUCY_DISCLAIMER_TEXT } from '../processing/drLucy';
 import { StoryView, type StorySubject } from './StoryView';
-// Redesigned Timeline (design system + useTimeline seam). Replaces the former inline TimelineView.
+// Redesigned views (design system + per-view seam hooks). Replace the former inline view functions.
 import { TimelineView } from './dashboard/TimelineView';
+import { FocusNowView } from './dashboard/FocusNowView';
+import { useDashboardData } from './hooks/useDashboardData';
+// Design-system primitives for the shell — aliased (Ds*) so they don't clash with the RN `Text` still
+// used by the not-yet-redesigned Library/Health views below.
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Text as DsText, Stack, SegmentedControl as DsSegmentedControl, tokens as dsTokens } from '../ui';
 import { StalenessReviewCard, ContextBatchCard } from '../components/StalenessReviewCard';
 import {
   ensureStalenessTable,
@@ -84,17 +89,6 @@ function displayTimestamp(value: string): string {
 // Note: getCardSummaryText / sourceLabel / noteTypeLabel / extractKeyPoints / ExtractionChips /
 // OrganizingDots moved to ./dashboard/helpers (used by the redesigned TimelineView).
 
-function groupUpdates(updates: CaptureRow[]): Record<number, CaptureRow[]> {
-  return updates.reduce<Record<number, CaptureRow[]>>((grouped, update) => {
-    if (update.parent_capture_id === null) {
-      return grouped;
-    }
-    const existing = grouped[update.parent_capture_id] ?? [];
-    grouped[update.parent_capture_id] = [...existing, update];
-    return grouped;
-  }, {});
-}
-
 function greetingForHour(hour: number): string {
   if (hour < 12) return 'Good morning';
   if (hour < 17) return 'Good afternoon';
@@ -109,9 +103,10 @@ export function DashboardScreen({ refreshToken, onAskAbout, requestedView, reque
   onViewChange?: (v: ViewMode) => void;
   initialAskQuestion?: string;
 }) {
+  const insets = useSafeAreaInsets();
   const [view, setView] = useState<ViewMode>('Timeline');
   const [tab, setTab] = useState<LibraryTab>('Home');
-  const [userName, setUserName] = useState('');
+  const [contextRefresh, setContextRefresh] = useState(0);
 
   // Allow the parent (bottom nav) to push a view in (e.g. Brain, Ask Lucy). Tapping Workspace always
   // lands on its Home grid, not whatever sub-section (Calendar/Documents) was last open.
@@ -122,91 +117,20 @@ export function DashboardScreen({ refreshToken, onAskAbout, requestedView, reque
 
   // Report the current view up so the bottom nav can highlight Home vs Brain.
   useEffect(() => { onViewChange?.(view); }, [view]);
-  const [todos, setTodos] = useState<TodoRow[]>([]);
-  const [ideas, setIdeas] = useState<IdeaRow[]>([]);
-  const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
-  const [reminders, setReminders] = useState<ReminderRow[]>([]);
-  const [captures, setCaptures] = useState<CaptureRow[]>([]);
-  const [updates, setUpdates] = useState<Record<number, CaptureRow[]>>({});
-  const [contextRequests, setContextRequests] = useState<ContextRequestRow[]>([]);
-  const [openLoops, setOpenLoops] = useState<OpenLoopRow[]>([]);
-  const [followUps, setFollowUps] = useState<FollowUpRow[]>([]);
-  const [moodTrend, setMoodTrend] = useState<{ dominant: string; positiveRatio: number; recentTones: string[] }>({ dominant: 'neutral', positiveRatio: 0.5, recentTones: [] });
-  const [onThisDay, setOnThisDay] = useState<import('../processing/onThisDay').OnThisDayMemory[]>([]);
-  const [moodsByCapture, setMoodsByCapture] = useState<Record<number, string>>({});
-  const [contextRefresh, setContextRefresh] = useState(0);
-  const [stalenessReviews, setStalenessReviews] = useState<StalenessReview[]>([]);
-  const [contextBatch, setContextBatch] = useState<ContextBatch | null>(null);
 
-  useEffect(() => {
-    void (async () => {
-      const db = await getDatabase();
-      const results = await Promise.all([
-        listTodos(db),
-        listIdeas(db),
-        listExpenses(db),
-        listReminders(db),
-        listRecentCaptures(db, 30),
-        listOpenContextRequests(db),
-        listOpenLoops(db),
-        listFollowUps(db),
-      ]);
-      setTodos(results[0]);
-      setIdeas(results[1]);
-      setExpenses(results[2]);
-      setReminders(results[3]);
-      setCaptures(results[4]);
-      setContextRequests(results[5]);
-      setOpenLoops(results[6]);
-      setFollowUps(results[7]);
-      // Load staleness reviews and context batch
-      try {
-        await ensureStalenessTable(db);
-        // Run a lightweight staleness check on every dashboard load (rate-limited inside)
-        await runStalenessCheck(db);
-        const reviews = await listPendingReviews(db);
-        setStalenessReviews(reviews.filter((r) => r.kind !== 'context_overflow'));
-        const batch = await getContextBatch(db);
-        setContextBatch(batch.total > 3 ? batch : null);
-      } catch { /* non-critical */ }
-      try {
-        const { getUserProfile } = await import('../db/userProfile');
-        const profile = await getUserProfile(db);
-        setUserName((profile.name ?? '').trim().split(/\s+/)[0] ?? '');
-      } catch { /* non-critical */ }
-      try {
-        const { getMoodTrend } = await import('../processing/temporalEngine');
-        setMoodTrend(await getMoodTrend(db, 7));
-      } catch { /* non-critical */ }
-      try {
-        const { getOnThisDayMemories } = await import('../processing/onThisDay');
-        setOnThisDay(await getOnThisDayMemories(db));
-      } catch { /* non-critical */ }
-      try {
-        const rows = await db.getAllAsync<{ capture_id: number; tone: string }>(
-          'SELECT capture_id, tone FROM mood_entries ORDER BY created_at DESC',
-        );
-        const map: Record<number, string> = {};
-        for (const row of rows) {
-          if (!map[row.capture_id]) map[row.capture_id] = row.tone; // most recent tone per capture
-        }
-        setMoodsByCapture(map);
-      } catch { /* non-critical */ }
-      const nextUpdates = await listCaptureUpdates(db, results[4].map((capture) => capture.id));
-      setUpdates(groupUpdates(nextUpdates));
-    })();
-  }, [refreshToken, contextRefresh]);
+  // All cross-cutting data comes from the seam hook (same frozen calls as Dashboard 1.0's load effect).
+  const data = useDashboardData(refreshToken, contextRefresh);
+  const { todos, ideas, expenses, reminders, captures, contextRequests, openLoops, followUps, moodTrend, onThisDay, moodsByCapture, userName, stalenessReviews, contextBatch } = data;
 
   const pendingTodos = todos.filter((item) => item.status === 'pending');
   const focusTasks = pendingTodos.filter((item) => item.urgency === 'high').slice(0, 3);
   const displayTasks = focusTasks.length ? focusTasks : pendingTodos.slice(0, 3);
   // Brain is reached via the bottom nav, so it's not in the top tab row.
   const views: ViewMode[] = ['Timeline', 'Focus Now', 'Ask Lucy', 'Health'];
-  const viewOptions: SegmentOption<ViewMode>[] = views.map((v) => ({ value: v, label: v, icon: VIEW_ICON[v] }));
+  const viewOptions = views.map((v) => ({ value: v, label: v, icon: VIEW_ICON[v] }));
 
-  // Lucy "speaks" — a warm, reactive two-part greeting that mirrors the day's state. The orb itself
-  // is the single global overlay (App.tsx) that sits in this hero's top-right, so the copy reads as
-  // her companion voice without seating a second orb here.
+  // Lucy "speaks" — a warm, reactive greeting that mirrors the day's state. The breathing orb is the
+  // global overlay (App.tsx) that sits in this hero's top-right, so the copy reads as her voice.
   const heroLine = pendingTodos.length
     ? `I'm holding ${pendingTodos.length} open task${pendingTodos.length === 1 ? '' : 's'} for you — tap Focus Now when you're ready.`
     : captures.length
@@ -214,15 +138,14 @@ export function DashboardScreen({ refreshToken, onAskAbout, requestedView, reque
       : 'Hold the mic or snap anything — I\'ll organize what matters.';
 
   return (
-    <View style={styles.container}>
-      <View style={styles.homeHero}>
-        <View style={styles.homeHeroGlow} />
-        <Text style={styles.todayDate}>{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
-        <Text style={styles.title} numberOfLines={1}>{greetingForHour(new Date().getHours())}{userName ? `, ${userName}` : ''}</Text>
-        <Text style={styles.subtitle} numberOfLines={2}>{heroLine}</Text>
-      </View>
-      <SegmentedControl options={viewOptions} value={view} onChange={setView} style={styles.viewNav} />
-      {view === 'Focus Now' ? <NowView todos={displayTasks} reminders={reminders} captures={captures} contextCount={contextRequests.length} openLoops={openLoops} followUps={followUps} moodTrend={moodTrend} onThisDay={onThisDay} onOpenContext={() => {}} onLoopResolved={() => setContextRefresh((v) => v + 1)} stalenessReviews={stalenessReviews} contextBatch={contextBatch} onStalenessResolved={() => setContextRefresh((v) => v + 1)} /> : null}
+    <View style={{ flex: 1, paddingHorizontal: dsTokens.spacing.base, paddingTop: insets.top + dsTokens.spacing.sm }}>
+      <Stack gap="xxs" style={{ marginBottom: dsTokens.spacing.md }}>
+        <DsText variant="footnote" color="accent" weight="700">{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</DsText>
+        <DsText variant="h1" numberOfLines={1}>{greetingForHour(new Date().getHours())}{userName ? `, ${userName}` : ''}</DsText>
+        <DsText variant="footnote" color="textMuted" numberOfLines={2}>{heroLine}</DsText>
+      </Stack>
+      <DsSegmentedControl options={viewOptions} value={view} onChange={setView} style={{ marginBottom: dsTokens.spacing.md }} />
+      {view === 'Focus Now' ? <FocusNowView todos={displayTasks} reminders={reminders} captures={captures} contextCount={contextRequests.length} openLoops={openLoops} followUps={followUps} moodTrend={moodTrend} onThisDay={onThisDay} onOpenContext={() => {}} onLoopResolved={() => setContextRefresh((v) => v + 1)} stalenessReviews={stalenessReviews} contextBatch={contextBatch} onStalenessResolved={() => setContextRefresh((v) => v + 1)} /> : null}
       {view === 'Timeline' ? <TimelineView captures={captures} moodsByCapture={moodsByCapture} onFeedback={() => setContextRefresh((v) => v + 1)} onQueued={() => setContextRefresh((v) => v + 1)} onAskAbout={onAskAbout} /> : null}
       {view === 'Ask Lucy' ? <AskScreen initialQuestion={initialAskQuestion} /> : null}
       {view === 'Brain' ? <LibraryView tab={tab} setTab={setTab} todos={todos} ideas={ideas} expenses={expenses} /> : null}
@@ -1595,305 +1518,6 @@ function HealthView() {
   );
 }
 
-// ─── Brain Pulse ──────────────────────────────────────────────────────────────
-
-const PULSE_ACCENT = '#C084FC'; // violet — distinct from all existing palette colors
-
-function PulseCard({ pulse, onDismiss }: { pulse: import('../db/brainPulses').BrainPulseRow; onDismiss: () => void }) {
-  const accentMap: Record<string, string> = {
-    pattern: PULSE_ACCENT,
-    person: '#60A5FA',
-    mood: '#F59E0B',
-    connection: '#4ADE80',
-    overdue: '#FB7185',
-  };
-  const labelMap: Record<string, string> = {
-    pattern: 'PATTERN',
-    person: 'PATTERN · PEOPLE',
-    mood: 'PATTERN · MOOD',
-    connection: 'CONNECTION',
-    overdue: 'HEADS UP',
-  };
-  const accent = accentMap[pulse.category] ?? PULSE_ACCENT;
-  const label = labelMap[pulse.category] ?? 'PULSE';
-  const age = (() => {
-    const ms = Date.now() - new Date(pulse.generated_at.includes('T') ? pulse.generated_at : `${pulse.generated_at.replace(' ', 'T')}Z`).getTime();
-    const h = Math.floor(ms / 3600000);
-    const m = Math.floor((ms % 3600000) / 60000);
-    return h > 0 ? `${h}h ago` : `${m}m ago`;
-  })();
-  return (
-    <View style={{ backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: '#2D1F40', borderRadius: 18, padding: 14, marginBottom: 10, borderLeftWidth: 3, borderLeftColor: accent, opacity: pulse.seen_at ? 0.78 : 1 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <Text style={{ color: accent, fontSize: 9, fontWeight: '800', letterSpacing: 1.2 }}>{label}</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11 }}>{age}</Text>
-          {/* Viral share button — shares the insight as plain text, no raw data */}
-          <TouchableOpacity
-            onPress={async () => {
-              try {
-                const { shareAsync, isAvailableAsync } = await import('expo-sharing');
-                const shareText = `LUCY noticed: "${pulse.headline}" — captured by my second brain`;
-                if (await isAvailableAsync()) {
-                  // Write to a temp file since expo-sharing needs a URI on some platforms
-                  const fs = await import('expo-file-system/legacy');
-                  const writeAsStringAsync = (fs as unknown as { writeAsStringAsync: (uri: string, contents: string) => Promise<void> }).writeAsStringAsync;
-                  const cacheDirectory = (fs as unknown as { cacheDirectory: string }).cacheDirectory ?? '';
-                  const uri = `${cacheDirectory}lucy-pulse.txt`;
-                  await writeAsStringAsync(uri, shareText);
-                  await shareAsync(uri, { mimeType: 'text/plain', dialogTitle: 'Share LUCY insight' });
-                }
-              } catch { /* non-critical */ }
-            }}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text style={{ color: accent, fontSize: 13, fontWeight: '700' }}>↗</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={onDismiss} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 14, fontWeight: '700' }}>✕</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-      <Text style={{ color: LUCY_COLORS.textDark, fontSize: 14, fontWeight: '600', lineHeight: 21 }}>{pulse.headline}</Text>
-    </View>
-  );
-}
-
-function BrainPulseSection() {
-  const [pulses, setPulses] = useState<import('../db/brainPulses').BrainPulseRow[]>([]);
-  const [showArchive, setShowArchive] = useState(false);
-  const [archived, setArchived] = useState<import('../db/brainPulses').BrainPulseRow[]>([]);
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        const db = await getDatabase();
-        const { listUnseenPulses, markPulseSeen } = await import('../db/brainPulses');
-        const rows = await listUnseenPulses(db);
-        setPulses(rows);
-        for (const p of rows.filter((r) => !r.seen_at)) {
-          await markPulseSeen(db, p.id);
-        }
-      } catch { /* non-critical */ }
-    })();
-  }, []);
-
-  const dismiss = async (id: number) => {
-    const db = await getDatabase();
-    const { dismissPulse } = await import('../db/brainPulses');
-    await dismissPulse(db, id);
-    setPulses((prev) => prev.filter((p) => p.id !== id));
-  };
-
-  const openArchive = async () => {
-    const db = await getDatabase();
-    const { listDismissedPulses } = await import('../db/brainPulses');
-    setArchived(await listDismissedPulses(db));
-    setShowArchive(true);
-  };
-
-  return (
-    <>
-      {pulses.length > 0 ? (
-        <CollapsibleSection title="Lucy Pulse" count={pulses.filter((p) => !p.seen_at).length || pulses.length} accent={PULSE_ACCENT}>
-          {pulses.map((p) => (
-            <PulseCard key={p.id} pulse={p} onDismiss={() => void dismiss(p.id)} />
-          ))}
-          <TouchableOpacity onPress={() => void openArchive()} style={{ alignSelf: 'flex-start', marginBottom: 8 }}>
-            <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12 }}>View archived pulses</Text>
-          </TouchableOpacity>
-        </CollapsibleSection>
-      ) : null}
-
-      {/* Archive modal */}
-      <Modal transparent animationType="fade" visible={showArchive} onRequestClose={() => setShowArchive(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setShowArchive(false)}>
-          <Pressable style={[styles.feedbackModal, { maxHeight: '80%', gap: 0 }]}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <Text style={{ color: PULSE_ACCENT, fontSize: 13, fontWeight: '800', letterSpacing: 1 }}>ARCHIVED PULSES</Text>
-              <TouchableOpacity onPress={() => setShowArchive(false)}>
-                <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 14, fontWeight: '700' }}>Done</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {archived.length === 0
-                ? <Text style={{ color: LUCY_COLORS.textSubtle, textAlign: 'center', padding: 24 }}>No archived pulses yet.</Text>
-                : archived.map((p) => (
-                    <View key={p.id} style={{ opacity: 0.6, marginBottom: 10, borderLeftWidth: 2, borderLeftColor: PULSE_ACCENT, paddingLeft: 10 }}>
-                      <Text style={{ color: LUCY_COLORS.textDark, fontSize: 13, fontWeight: '600' }}>{p.headline}</Text>
-                      <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 11, marginTop: 2 }}>
-                        {new Date(p.generated_at.includes('T') ? p.generated_at : `${p.generated_at.replace(' ', 'T')}Z`).toLocaleDateString()}
-                      </Text>
-                    </View>
-                  ))
-              }
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
-    </>
-  );
-}
-
-function NowView({
-  todos,
-  reminders,
-  captures,
-  contextCount,
-  openLoops,
-  followUps,
-  moodTrend,
-  onThisDay,
-  onOpenContext,
-  onLoopResolved,
-  stalenessReviews = [],
-  contextBatch = null,
-  onStalenessResolved,
-}: {
-  todos: TodoRow[];
-  reminders: ReminderRow[];
-  captures: CaptureRow[];
-  contextCount: number;
-  openLoops: OpenLoopRow[];
-  followUps: FollowUpRow[];
-  moodTrend: { dominant: string; positiveRatio: number; recentTones: string[] };
-  onThisDay: import('../processing/onThisDay').OnThisDayMemory[];
-  onOpenContext: () => void;
-  onLoopResolved: () => void;
-  stalenessReviews?: StalenessReview[];
-  contextBatch?: ContextBatch | null;
-  onStalenessResolved?: () => void;
-}) {
-  const moodEmoji: Record<string, string> = { positive: '😊', excited: '⚡', calm: '😌', neutral: '😐', stressed: '😤', frustrated: '😤', negative: '😔' };
-  const moodColor: Record<string, string> = { positive: '#4ADE80', excited: '#FFA05C', calm: '#60A5FA', neutral: LUCY_COLORS.textSubtle, stressed: '#F59E0B', frustrated: '#FB7185', negative: '#FB7185' };
-  const organizing = captures.filter((item) => captureStatus(item) !== 'complete').length;
-  const nowMs = Date.now();
-  const STALE_MS = 4 * 60 * 60 * 1000; // 4h past due = stale
-  const scheduledReminders = reminders.filter((item) => {
-    if (!item.remind_at) return false;
-    return new Date(item.remind_at).getTime() > nowMs - STALE_MS;
-  });
-  const staleReminders = reminders.filter((item) => {
-    if (!item.remind_at) return false;
-    return new Date(item.remind_at).getTime() <= nowMs - STALE_MS;
-  });
-  const unscheduledCount = reminders.length - scheduledReminders.length - staleReminders.length;
-
-  const handleResolveLoop = async (id: number) => {
-    const db = await getDatabase();
-    await resolveOpenLoop(db, id);
-    onLoopResolved();
-  };
-
-  const handleResolveFollowUp = async (id: number) => {
-    const db = await getDatabase();
-    await resolveFollowUp(db, id);
-    onLoopResolved();
-  };
-
-  return (
-    <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-      <View style={styles.tonight}>
-        <Text style={styles.eyebrow}>TONIGHT</Text>
-        <Text style={styles.tonightTitle}>
-          {todos.length ? `${todos.length} priority item${todos.length === 1 ? '' : 's'} waiting` : 'Nothing urgent waiting'}
-        </Text>
-        <Text style={styles.tonightDetail}>
-          {organizing ? `${organizing} capture${organizing === 1 ? '' : 's'} still organizing.` : 'Everything captured has been organized.'}
-        </Text>
-        {moodTrend.recentTones.length > 0 ? (
-          <View style={styles.moodBar}>
-            <Text style={[styles.moodLabel, { color: moodColor[moodTrend.dominant] ?? LUCY_COLORS.textSubtle }]}>
-              {moodEmoji[moodTrend.dominant] ?? '😐'} {moodTrend.dominant} this week
-            </Text>
-            <View style={styles.moodDots}>
-              {moodTrend.recentTones.slice(0, 7).map((tone, i) => (
-                <View key={i} style={[styles.moodDot, { backgroundColor: moodColor[tone] ?? LUCY_COLORS.textSubtle }]} />
-              ))}
-            </View>
-          </View>
-        ) : null}
-      </View>
-      {onThisDay.length > 0 ? (
-        <CollapsibleSection title="On this day" count={onThisDay.length}>
-          <View style={styles.otdCard}>
-            <Text style={styles.otdLabel}>On this day</Text>
-            <Text style={styles.otdTitle}>
-              {onThisDay[0].yearsAgo === 1 ? 'A year ago' : `${onThisDay[0].yearsAgo} years ago`} — {onThisDay[0].title}
-            </Text>
-            {onThisDay[0].snippet ? <Text style={styles.otdSnippet} numberOfLines={2}>{onThisDay[0].snippet}</Text> : null}
-            {onThisDay.length > 1 ? (
-              <Text style={styles.otdMore}>+ {onThisDay.length - 1} more from this day</Text>
-            ) : null}
-          </View>
-        </CollapsibleSection>
-      ) : null}
-      {/* Brain Pulse — 6-hour cross-domain insight synthesis */}
-      <BrainPulseSection />
-
-      {/* Staleness reviews — shown before Follow-ups so the user cleans house first */}
-      {stalenessReviews.length > 0 ? (
-        <CollapsibleSection title="Quick Review" count={stalenessReviews.length}>
-          {stalenessReviews.map((review) => (
-            <StalenessReviewCard
-              key={review.id}
-              review={review}
-              onDone={() => onStalenessResolved?.()}
-            />
-          ))}
-        </CollapsibleSection>
-      ) : null}
-
-      {/* Commitment guardian — promises to keep + things owed; at-risk ranks above generic follow-ups. */}
-      <CommitmentsSection onChange={onLoopResolved} />
-
-      {followUps.length > 0 ? (
-        <CollapsibleSection title="Follow-ups" count={followUps.length}>
-          {followUps.map((item) => (
-            <View style={styles.loopCard} key={item.id}>
-              <Text style={styles.cardTitle}>{item.assignee ? `${item.assignee}: ` : ''}{protectedPreview(item.action)}</Text>
-              <TouchableOpacity style={styles.resolveButton} onPress={() => void handleResolveFollowUp(item.id)}>
-                <Text style={styles.resolveText}>Done</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-        </CollapsibleSection>
-      ) : null}
-      <SectionTitle title="Reminders" count={scheduledReminders.length || undefined} />
-      {scheduledReminders.length ? scheduledReminders.map((item) => <ReminderCard item={item} key={item.id} />) : <EmptyLine text="No scheduled reminders yet." />}
-      {unscheduledCount ? <Text style={styles.pendingHint}>{unscheduledCount} captured reminder{unscheduledCount === 1 ? '' : 's'} need a specific time.</Text> : null}
-      <SectionTitle title="Focus" count={todos.length || undefined} />
-      {todos.length ? todos.map((item) => <FocusTodoCard key={item.id} item={item} />) : (
-        <LucyEmptyState
-          compact
-          title="Nothing on your plate"
-          message="Capture a task by voice or text and I'll line it up here for you."
-        />
-      )}
-
-      {/* Needs Context — moved to bottom so it doesn't clutter the main focus.
-          Shows only when there are unanswered clarification requests. */}
-      {contextCount > 0 && !contextBatch ? (
-        <CollapsibleSection title="Needs Context" count={contextCount}>
-          <TouchableOpacity style={styles.contextPrompt} onPress={onOpenContext}>
-            <Text style={styles.contextPromptTitle}>
-              {contextCount > 5
-                ? `${contextCount} memories could be clearer — tap to answer one`
-                : `${contextCount} memory detail${contextCount === 1 ? '' : 's'} could become clearer`}
-            </Text>
-            <Text style={styles.tonightDetail}>Add context when you have time — LUCY folds your answer into that memory and re-organizes it.</Text>
-          </TouchableOpacity>
-        </CollapsibleSection>
-      ) : null}
-      {contextBatch ? (
-        <CollapsibleSection title="Needs Context" count={contextBatch.total}>
-          <ContextBatchCard batch={contextBatch} onDone={() => onStalenessResolved?.()} />
-        </CollapsibleSection>
-      ) : null}
-    </ScrollView>
-  );
-}
-
 export function NeedsContextView({
   requests,
   onAnswered,
@@ -2784,34 +2408,6 @@ function PeopleTab() {
   );
 }
 
-const URGENCY_CONFIG = {
-  high: { label: 'HIGH', color: '#EF4444', bg: 'rgba(239,68,68,0.12)' },
-  medium: { label: 'MED', color: '#F59E0B', bg: 'rgba(245,158,11,0.12)' },
-  low: { label: 'LOW', color: '#6EE7B7', bg: 'rgba(110,231,183,0.10)' },
-};
-
-function FocusTodoCard({ item }: { item: TodoRow }) {
-  const urg = URGENCY_CONFIG[item.urgency as 'high' | 'medium' | 'low'] ?? URGENCY_CONFIG.low;
-  return (
-    <View style={[styles.card, { borderLeftWidth: 3, borderLeftColor: urg.color, paddingLeft: 13 }]}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.cardTitle} numberOfLines={2}>{protectedPreview(item.task)}</Text>
-          {item.category ? (
-            <Text style={{ color: LUCY_COLORS.textSubtle, fontSize: 12, marginTop: 3, textTransform: 'capitalize' }}>{item.category}</Text>
-          ) : null}
-        </View>
-        <View style={{ alignItems: 'flex-end', gap: 6 }}>
-          <View style={{ backgroundColor: urg.bg, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3 }}>
-            <Text style={{ color: urg.color, fontSize: 10, fontWeight: '800', letterSpacing: 0.6 }}>{urg.label}</Text>
-          </View>
-          {item.privacy_level ? <PrivacyBadge level={item.privacy_level} /> : null}
-        </View>
-      </View>
-    </View>
-  );
-}
-
 function SectionTitle({ title, count }: { title: string; count?: number }) {
   return (
     <View style={styles.sectionTitleRow}>
@@ -2828,16 +2424,6 @@ function SectionTitle({ title, count }: { title: string; count?: number }) {
 
 function EmptyLine({ text }: { text: string }) {
   return <Text style={styles.empty}>{text}</Text>;
-}
-
-function ReminderCard({ item }: { item: ReminderRow }) {
-  const time = item.remind_at
-    ? new Date(item.remind_at).toLocaleString(undefined, {
-        weekday: 'short', month: 'short', day: 'numeric',
-        hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
-      })
-    : 'Time not specified';
-  return <Card title={protectedPreview(item.text)} detail={item.notification_id ? time : `${time} · notification pending`} privacy={item.privacy_level} />;
 }
 
 function Card({ title, detail, privacy, onDelete }: { title: string; detail: string; privacy?: 'private' | 'local' | 'normal'; onDelete?: () => void }) {
