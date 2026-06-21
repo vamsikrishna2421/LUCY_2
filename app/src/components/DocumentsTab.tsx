@@ -148,7 +148,24 @@ export function DocumentsTab() {
             <TouchableOpacity style={styles.close} onPress={() => setSelected(null)}><Text style={styles.closeX}>✕</Text></TouchableOpacity>
             {selected ? (
               <ScrollView>
-                {(bigImg || selected.thumb) ? <Image source={{ uri: bigImg || selected.thumb || '' }} style={styles.bigImg} resizeMode="contain" /> : null}
+                {(bigImg || selected.thumb) ? (
+                  <>
+                    {/* Pinch-to-zoom: an inner zoomable ScrollView so the document can be read up close. */}
+                    <ScrollView
+                      style={styles.zoomWrap}
+                      contentContainerStyle={styles.zoomContent}
+                      maximumZoomScale={5}
+                      minimumZoomScale={1}
+                      bouncesZoom
+                      centerContent
+                      showsHorizontalScrollIndicator={false}
+                      showsVerticalScrollIndicator={false}
+                    >
+                      <Image source={{ uri: bigImg || selected.thumb || '' }} style={styles.bigImg} resizeMode="contain" />
+                    </ScrollView>
+                    <Text style={styles.zoomHint}>Pinch to zoom</Text>
+                  </>
+                ) : null}
                 <Text style={styles.dBucket}>{selected.bucket || 'Other'}</Text>
                 <Text style={styles.dTitle}>{selected.title || 'Document'}</Text>
                 {selected.description ? <Text style={styles.dDesc}>{selected.description}</Text> : null}
@@ -197,7 +214,10 @@ const styles = StyleSheet.create({
   sheet: { backgroundColor: LUCY_COLORS.surfaceSheet, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '88%', borderTopWidth: 1, borderTopColor: LUCY_COLORS.border },
   close: { position: 'absolute', top: 12, right: 14, zIndex: 2, width: 32, height: 32, borderRadius: 16, backgroundColor: LUCY_COLORS.surfaceRaised, alignItems: 'center', justifyContent: 'center' },
   closeX: { color: LUCY_COLORS.textMuted, fontSize: 15 },
-  bigImg: { width: '100%', height: 320, borderRadius: 14, backgroundColor: LUCY_COLORS.surfaceRaised, marginBottom: 14 },
+  zoomWrap: { height: 320, borderRadius: 14, overflow: 'hidden', backgroundColor: LUCY_COLORS.surfaceRaised },
+  zoomContent: { flexGrow: 1, justifyContent: 'center' },
+  zoomHint: { color: LUCY_COLORS.textFaint, fontSize: 11, textAlign: 'center', marginTop: 6, marginBottom: 12 },
+  bigImg: { width: '100%', height: 320, borderRadius: 14, backgroundColor: LUCY_COLORS.surfaceRaised },
   dBucket: { color: LUCY_COLORS.primary, fontSize: 11, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' },
   dTitle: { color: LUCY_COLORS.textDark, fontSize: 20, fontWeight: '900', marginTop: 4, marginBottom: 8 },
   dDesc: { color: LUCY_COLORS.textMuted, fontSize: 14, lineHeight: 21 },
