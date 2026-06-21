@@ -21,10 +21,10 @@ metrics dashboard) that 1.0 lacked. Ship something **real and runnable**, not va
 | 0.1 File-tree inventory | orchestrator | ✅ `docs/00_FILE_TREE_INVENTORY.md` |
 | 0.2 Feature Catalog | BA agent | ✅ LOCKED `docs/10_FEATURE_CATALOG.md` — 470 rows; 5 rulings parked in NEEDS_FROM_YOU §G |
 | 1 Seam report + interface contract | architect | ✅ `docs/04_SEAM_REPORT.md` — redesign safe, zero logic edits |
-| 2 IA / flows | orchestrator+UX | 🔜 |
+| 2 IA / flows | orchestrator+UX | ✅ flows preserved per parity (same start/end states); nav model unchanged — see docs/04 + redesigned screens |
 | 3 Design system (code) | design agent | ✅ `app/src/ui/` (34 primitives + motion/layout/theme) |
-| 4 Build | engineers | ⏳ design-system+monetization+monitoring integrated (0 tsc); web dashboard done; **7 screens redesigned** (Capture, Ask, Settings, Galaxy, Connectors, Story, Notifications) + iOS/Android audit (render tests 16/16); **Dashboard screen** in progress |
-| 5 QA (parity + constraints) | QA agent | 🔜 |
+| 4 Build | engineers | ✅ ALL screens on ui/ (Capture, Ask, Settings, Galaxy, Connectors, Story, Notifications + Dashboard: Timeline/FocusNow/Library/Health) — Dashboard.tsx 4058→538; monetization+monitoring+web-dashboard integrated; 0 tsc, 16/16 render |
+| 5 QA (parity + constraints) | orchestrator | ✅ `docs/13_QA_REPORT.md` — parity (logic 1:1, 26/26 tests), 5 constraints, iOS+Android; verdict: complete + better than 1.0 |
 
 ## Workstreams (parallel)
 - **A — Feature Catalog** (BA): exhaustive parity contract from 1.0 source.
