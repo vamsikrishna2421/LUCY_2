@@ -327,7 +327,7 @@ export function SettingsScreen({
         <Spacer size="lg" />
 
         {/* ── You & profile ── */}
-        <SettingsGroup icon="person-circle-outline" title="You & profile" summary="Who you are, learned profile, check-ins & reminders" pill={s.profile.name ? 'Set' : 'Set up'}>
+        <SettingsGroup icon="person-circle-outline" title="Profile" summary="Who you are, learned profile, check-ins & reminders">
           <SettingsRow
             title="About you"
             value={s.profile.name ? `${s.profile.name}${s.profile.about ? ' · ' + s.profile.about.slice(0, 30) + (s.profile.about.length > 30 ? '…' : '') : ''}` : 'Tell LUCY who you are'}
@@ -344,7 +344,7 @@ export function SettingsScreen({
         </SettingsGroup>
 
         {/* ── Your day & energy ── */}
-        <SettingsGroup icon="partly-sunny-outline" title="Your day & energy" summary="Office hours, sleep & when you're at your best" pill={s.dayShaped ? 'Shaped' : undefined}>
+        <SettingsGroup icon="partly-sunny-outline" title="Customize energy levels" summary="Office hours, sleep & when you're at your best">
           <SettingsRow
             title="Shape your day"
             value={s.dayShaped ? 'Custom hours & energy — tap to fine-tune when Lucy schedules' : 'Set your work hours and how your energy moves through the day'}
@@ -357,7 +357,7 @@ export function SettingsScreen({
         </SettingsGroup>
 
         {/* ── AI & intelligence ── */}
-        <SettingsGroup icon="sparkles-outline" title="AI & intelligence" summary="Models, on-device intelligence & organizing" pill={s.hasClaudeKey ? 'Claude' : undefined}>
+        <SettingsGroup icon="sparkles-outline" title="AI & intelligence" summary="Models, on-device intelligence & organizing">
           <IntelligenceModelsBlock s={s} claudeKey={claudeKey} setClaudeKey={setClaudeKey} savingClaudeKey={savingClaudeKey} onSaveKey={() => void saveClaudeKey()} />
 
           <Spacer size="sm" />
@@ -368,7 +368,7 @@ export function SettingsScreen({
         </SettingsGroup>
 
         {/* ── Voice ── */}
-        <SettingsGroup icon="mic-outline" title="Voice" summary="Hey Lucy wake word, Lucy's voice, hands-free" pill={wakeWordEnabled && s.wakeStatus === 'listening' ? 'Listening' : undefined}>
+        <SettingsGroup icon="mic-outline" title="Voice" summary="Hey Lucy wake word, Lucy's voice, hands-free" pill={wakeWordEnabled ? 'On' : undefined}>
           <SettingsRow
             title="Hey Lucy wake word"
             value={
@@ -419,7 +419,7 @@ export function SettingsScreen({
         </SettingsGroup>
 
         {/* ── About & updates ── */}
-        <SettingsGroup icon="information-circle-outline" title="About & updates" summary="Keep LUCY up to date">
+        <SettingsGroup icon="information-circle-outline" title="Check for updates" summary="Keep LUCY up to date">
           <SettingsRow title="Check for updates" value="Fetch the latest LUCY improvements and restart into them" onAction={() => void checkForUpdates()} actionLabel="Check" />
         </SettingsGroup>
 
