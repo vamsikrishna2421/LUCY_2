@@ -116,7 +116,6 @@ export function HealthView() {
 
   const moodCount = mood7.reduce<Record<string, number>>((acc, m) => { acc[m.tone] = (acc[m.tone] ?? 0) + 1; return acc; }, {});
   const dominantMood = Object.entries(moodCount).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
-  const tip = today ? health.healthTip(today.steps, today.sleep_hours, today.resting_hr) : null;
 
   const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const last7Keys: string[] = [];
@@ -256,14 +255,6 @@ export function HealthView() {
         </Row>
       ) : null}
 
-      {tip ? (
-        <Card level="surface" padding="md" style={{ borderLeftWidth: 3, borderLeftColor: TEAL, borderColor: `${TEAL}44` }}>
-          <Text variant="caption" weight="700" tracking={1.4} style={{ color: TEAL }}>HEALTH TIP</Text>
-          <Spacer size="xs" />
-          <Text variant="footnote" color="textMuted">{tip}</Text>
-        </Card>
-      ) : null}
-
       {health7.some((h) => h.steps > 0) ? (
         <Surface level="surfaceAlt" radius="lg" border="border" padding="md">
           <Text variant="caption" weight="700" tracking={1.4} style={{ color: TEAL }}>STEPS — LAST 7 DAYS</Text>
@@ -297,10 +288,10 @@ export function HealthView() {
         </Surface>
       ) : null}
 
-      {/* How you've been: mood graph + this week */}
-      <MoodGraphCard />
-
       <WeeklyLifeWidget theme={theme} healthTip={health.healthTip} />
+
+      {/* How you've been — mood graph grouped with the weekly mood summary at the very bottom */}
+      <MoodGraphCard />
 
       {dominantMood ? (
         <Surface level="surfaceAlt" radius="lg" border="border" padding="md">
@@ -349,8 +340,8 @@ export function HealthView() {
     <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing.xl, gap: spacing.base }}>
       <SegmentedControl<HealthTab>
         options={[
-          { value: 'Food', label: 'Food', icon: 'restaurant-outline' },
           { value: 'Activity', label: 'Activity', icon: 'walk-outline' },
+          { value: 'Food', label: 'Food', icon: 'restaurant-outline' },
         ]}
         value={tab}
         onChange={setTab}

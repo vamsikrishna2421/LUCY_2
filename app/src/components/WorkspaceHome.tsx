@@ -169,6 +169,15 @@ export function WorkspaceHome({ onOpen, onPlanDay }: { onOpen: (tab: string) => 
         <Text style={styles.sub}>Calendar, documents, projects, and loose ends gathered into one quiet place.</Text>
       </View>
 
+      {/* Compact Plan My Day — pinned at the top, single row, minimal height. */}
+      <TouchableOpacity activeOpacity={0.9} style={styles.planBtn} onPress={onPlanDay}>
+        <View style={styles.planIcon}>
+          <Ionicons name="sparkles" size={18} color={LUCY_COLORS.white} />
+        </View>
+        <Text style={styles.planT}>Plan My Day</Text>
+        <Ionicons name="arrow-forward" size={18} color={LUCY_COLORS.white} />
+      </TouchableOpacity>
+
       <View style={styles.grid}>
         {tiles.map((tile) => (
           <TouchableOpacity
@@ -193,37 +202,6 @@ export function WorkspaceHome({ onOpen, onPlanDay }: { onOpen: (tab: string) => 
             </View>
           </TouchableOpacity>
         ))}
-      </View>
-
-      <TouchableOpacity activeOpacity={0.9} style={styles.planBtn} onPress={onPlanDay}>
-        <View style={styles.planIcon}>
-          <Ionicons name="sparkles" size={22} color={LUCY_COLORS.white} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.planT}>Plan My Day</Text>
-          <Text style={styles.planD}>Let Lucy place open tasks around what is already true.</Text>
-        </View>
-        <Ionicons name="arrow-forward" size={19} color={LUCY_COLORS.white} />
-      </TouchableOpacity>
-
-      <View style={styles.qaBox}>
-        <View style={styles.qaHead}>
-          <Text style={styles.qaH}>Quick actions</Text>
-          <Text style={styles.qaSub}>Start from intent</Text>
-        </View>
-        <View style={styles.qaGrid}>
-          {([
-            ['time-outline', 'Find time', () => onOpen('Calendar')],
-            ['cloud-upload-outline', 'Upload doc', () => onOpen('Documents')],
-            ['link-outline', 'Add link', () => onOpen('Resources')],
-            ['add-circle-outline', 'New project', () => onOpen('Projects')],
-          ] as Array<[keyof typeof Ionicons.glyphMap, string, () => void]>).map(([icon, label, action]) => (
-            <TouchableOpacity key={label} style={styles.qaBtn} onPress={action}>
-              <Ionicons name={icon} size={18} color={LUCY_COLORS.primaryGlow} />
-              <Text style={styles.qaLabel}>{label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
       </View>
 
       <Text style={styles.moreH}>Brain & knowledge</Text>
@@ -269,10 +247,9 @@ const styles = StyleSheet.create({
   tileCount: { color: LUCY_COLORS.textDark, fontSize: 31, fontWeight: '900', lineHeight: 35 },
   tileName: { color: LUCY_COLORS.textDark, fontWeight: '700', fontSize: 15, marginTop: 12 },
   tileStatus: { color: LUCY_COLORS.textMuted, fontSize: 11.5, marginTop: 4, lineHeight: 16 },
-  planBtn: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: LUCY_COLORS.primary, borderRadius: 18, padding: 16, marginTop: 2, marginBottom: 14, shadowColor: LUCY_COLORS.primary, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.18, shadowRadius: 12, elevation: 4 },
-  planIcon: { width: 40, height: 40, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.16)', alignItems: 'center', justifyContent: 'center' },
-  planT: { color: '#fff', fontWeight: '800', fontSize: 16 },
-  planD: { color: 'rgba(255,255,255,0.84)', fontSize: 12, marginTop: 3, lineHeight: 17 },
+  planBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: LUCY_COLORS.primary, borderRadius: 14, paddingVertical: 11, paddingHorizontal: 14, marginBottom: 14, shadowColor: LUCY_COLORS.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.18, shadowRadius: 10, elevation: 4 },
+  planIcon: { width: 32, height: 32, borderRadius: 11, backgroundColor: 'rgba(255,255,255,0.16)', alignItems: 'center', justifyContent: 'center' },
+  planT: { color: '#fff', fontWeight: '800', fontSize: 15, flex: 1 },
   qaBox: { backgroundColor: LUCY_COLORS.surfaceRaised, borderWidth: 1, borderColor: LUCY_COLORS.border, borderRadius: 18, padding: 15 },
   qaHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 },
   qaH: { color: LUCY_COLORS.textDark, fontWeight: '800', fontSize: 15 },

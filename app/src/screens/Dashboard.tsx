@@ -77,12 +77,18 @@ export function DashboardScreen({ refreshToken, onAskAbout, requestedView, reque
 
   return (
     <View style={{ flex: 1, paddingHorizontal: dsTokens.spacing.base, paddingTop: dsTokens.spacing.sm }}>
-      <Stack gap="xxs" style={{ marginBottom: dsTokens.spacing.md }}>
-        <DsText variant="footnote" color="accent" weight="700">{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</DsText>
-        <DsText variant="h1" numberOfLines={1}>{greetingForHour(new Date().getHours())}{userName ? `, ${userName}` : ''}</DsText>
-        <DsText variant="footnote" color="textMuted" numberOfLines={2}>{heroLine}</DsText>
-      </Stack>
-      <DsSegmentedControl options={viewOptions} value={view} onChange={setView} style={{ marginBottom: dsTokens.spacing.md }} />
+      {/* On Workspace (Brain) the greeting + view tabs are hidden so its own command-center header shows
+          directly — the owner didn't want the dashboard chrome there. */}
+      {view !== 'Brain' ? (
+        <>
+          <Stack gap="xxs" style={{ marginBottom: dsTokens.spacing.md }}>
+            <DsText variant="footnote" color="accent" weight="700">{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</DsText>
+            <DsText variant="h1" numberOfLines={1}>{greetingForHour(new Date().getHours())}{userName ? `, ${userName}` : ''}</DsText>
+            <DsText variant="footnote" color="textMuted" numberOfLines={2}>{heroLine}</DsText>
+          </Stack>
+          <DsSegmentedControl options={viewOptions} value={view} onChange={setView} style={{ marginBottom: dsTokens.spacing.md }} />
+        </>
+      ) : null}
       {view === 'Focus Now' ? <FocusNowView todos={displayTasks} reminders={reminders} captures={captures} contextCount={contextRequests.length} openLoops={openLoops} followUps={followUps} moodTrend={moodTrend} onThisDay={onThisDay} onOpenContext={() => {}} onLoopResolved={() => setContextRefresh((v) => v + 1)} stalenessReviews={stalenessReviews} contextBatch={contextBatch} onStalenessResolved={() => setContextRefresh((v) => v + 1)} /> : null}
       {view === 'Timeline' ? <TimelineView captures={captures} moodsByCapture={moodsByCapture} onFeedback={() => setContextRefresh((v) => v + 1)} onQueued={() => setContextRefresh((v) => v + 1)} onAskAbout={onAskAbout} /> : null}
       {view === 'Ask Lucy' ? <AskScreen initialQuestion={initialAskQuestion} /> : null}

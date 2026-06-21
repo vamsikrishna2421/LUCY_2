@@ -215,15 +215,7 @@ export function CaptureScreen({
       >
         {/* Hero — calm, alive (breathing orb), self-evident status */}
         <Stack gap="md" paddingX="lg" style={{ paddingTop: spacing.base }}>
-          {/* Greeting only — LUCY's face is the global floating orb (App.tsx), so no hero orb here
-              (having both produced two LUCY orbs on this screen). */}
-          <View>
-            <Text variant="footnote" color="accent" weight="700">
-              {getGreeting()}{userName ? `, ${userName}` : ''}
-            </Text>
-            <Text variant="h1" tracking={-0.5}>LUCY</Text>
-          </View>
-
+          {/* Greeting removed per owner — the board starts straight at the status card. */}
           <Card level="surfaceAlt" border="accentLine">
             <Text variant="caption" color="accent" weight="700" tracking={1.2}>LUCY IS ACTIVE</Text>
             <Spacer size="xs" />
