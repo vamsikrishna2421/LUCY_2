@@ -200,17 +200,19 @@ export function ScheduleTab() {
     if (!sugg || !comment.trim()) return;
     setBusy(true); setSuggLoading(true);
     try {
-      const { parseTimingConstraint } = await import('../scheduling/timingConstraint');
+      const { parseTimingConstraint, parseDurationMin } = await import('../scheduling/timingConstraint');
       const c = parseTimingConstraint(comment);
-      if (!c) { setInfoSheet({ title: 'When should it be?', message: 'Try things like "in the morning", "tomorrow afternoon", "this evening", "not tomorrow", "after the 25th", or "next week".', actions: [{ label: 'Got it', style: 'primary' }], cancelLabel: null }); return; }
+      const dur = parseDurationMin(comment);
+      if (!c && !dur) { setInfoSheet({ title: 'When, or how long?', message: 'Try a time — "in the morning", "tomorrow afternoon", "next week", "after the 25th" — or a length — "1 hour", "30 minutes".', actions: [{ label: 'Got it', style: 'primary' }], cancelLabel: null }); return; }
       const db = await getDatabase();
       const r = await suggestForText(db, sugg.meta.title, {
-        durationMin: sugg.meta.durationMin,
-        earliestStart: c.earliestStart,
-        horizonDays: c.horizonDays,
-        preferWindowMin: c.windowMinStart != null && c.windowMinEnd != null ? { start: c.windowMinStart, end: c.windowMinEnd } : undefined,
+        durationMin: dur ?? sugg.meta.durationMin,
+        earliestStart: c?.earliestStart,
+        horizonDays: c?.horizonDays,
+        preferWindowMin: c?.windowMinStart != null && c?.windowMinEnd != null ? { start: c.windowMinStart, end: c.windowMinEnd } : undefined,
       });
-      setSugg({ meta: r.meta, suggestions: r.suggestions, todoId: sugg.todoId, windowLabel: c.label });
+      const durLabel = dur ? (dur % 60 === 0 ? `${dur / 60} hr` : dur > 60 ? `${Math.floor(dur / 60)}h ${dur % 60}m` : `${dur} min`) : null;
+      setSugg({ meta: r.meta, suggestions: r.suggestions, todoId: sugg.todoId, windowLabel: [c?.label, durLabel].filter(Boolean).join(' · ') || sugg.windowLabel });
       setSuggKey((k) => k + 1);
       setRefineText('');
     } finally { setBusy(false); setSuggLoading(false); }
@@ -816,7 +818,7 @@ export function ScheduleTab() {
                     ))}
                   </View>
                   <View style={styles.refineRow}>
-                    <TextInput style={styles.refineInput} placeholder="…or tell me when (e.g. last week of June)" placeholderTextColor={LUCY_COLORS.textFaint} value={refineText} onChangeText={setRefineText} onSubmitEditing={() => refineSuggestion(refineText)} returnKeyType="search" />
+                    <TextInput style={styles.refineInput} placeholder="…when or how long (e.g. tomorrow morning, 1 hour)" placeholderTextColor={LUCY_COLORS.textFaint} value={refineText} onChangeText={setRefineText} onSubmitEditing={() => refineSuggestion(refineText)} returnKeyType="search" />
                     <TouchableOpacity style={[styles.refineGo, (!refineText.trim() || busy) && styles.refineGoOff]} disabled={busy || !refineText.trim()} onPress={() => refineSuggestion(refineText)}><Text style={styles.refineGoT}>Find</Text></TouchableOpacity>
                   </View>
                 </View>

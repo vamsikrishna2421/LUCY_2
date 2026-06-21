@@ -127,6 +127,22 @@ export function parseTimingConstraint(text: string, now = Date.now()): TimingCon
   return null;
 }
 
+/** Parse a duration phrase ("1 hour", "90 min", "half an hour", "1h 30m") to minutes, else null. Clamped 5–480. */
+export function parseDurationMin(text: string): number | null {
+  const q = (text || '').toLowerCase();
+  let mins: number | null = null;
+  if (/\bhalf an hour\b/.test(q)) mins = 30;
+  else if (/\b(an|one) hour\b/.test(q)) mins = 60;
+  else {
+    const hr = q.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|hr|h)\b/);
+    const min = q.match(/(\d+)\s*(?:minutes?|mins?|min|m)\b/);
+    if (hr) mins = Math.round(parseFloat(hr[1]) * 60) + (min ? parseInt(min[1], 10) : 0);
+    else if (min) mins = parseInt(min[1], 10);
+  }
+  if (mins == null || !Number.isFinite(mins)) return null;
+  return Math.max(5, Math.min(480, mins));
+}
+
 function ordinal(n: number): string {
   const s = ['th', 'st', 'nd', 'rd']; const v = n % 100;
   return s[(v - 20) % 10] ?? s[v] ?? s[0];
