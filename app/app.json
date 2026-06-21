@@ -94,7 +94,7 @@
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
       "package": "com.anonymous.lucy",
-      "versionCode": 105,
+      "versionCode": 106,
       "intentFilters": [
         {
           "action": "SEND",

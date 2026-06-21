@@ -82,8 +82,13 @@ export function PressableScale({
       accessibilityState={{ disabled: !!disabled }}
       hitSlop={hitSlop}
       testID={testID}
+      // Layout style (flex, width, margin) MUST live on the Pressable itself — otherwise a `flex:1`
+      // passed by a caller lands on the inner Animated.View, the Pressable stays content-sized, and any
+      // flex:1 child collapses to 0 width (this is what made Settings row TITLES disappear). The inner
+      // view only carries the press-scale transform; it stretches to the Pressable via default align.
+      style={style}
     >
-      <Animated.View style={[style, { transform: [{ scale }] }]}>{children}</Animated.View>
+      <Animated.View style={{ flexShrink: 1, transform: [{ scale }] }}>{children}</Animated.View>
     </Pressable>
   );
 }

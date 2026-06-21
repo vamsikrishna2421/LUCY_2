@@ -26,7 +26,7 @@ import { autoRestoreDeviceModel, initializeDeviceModelSelection } from './src/ai
 import { archiveUnmatchedCompletionRetries } from './src/processing/followUp';
 import { initializeNotifications, updatePersistentStatusNotification } from './src/processing/notifications';
 import { NotificationCenter } from './src/components/NotificationCenter';
-import { AnimatedFace } from './src/components/AnimatedFace';
+import { FloatingLucy } from './src/components/FloatingLucy';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { getTotalUnreadCount } from './src/db/notificationLog';
 import { initializeVault } from './src/processing/vault';
@@ -804,13 +804,12 @@ export default function App() {
     } catch { Alert.alert('Could not read that', 'Please try again with a clearer photo.'); } finally { setSnapBusy(false); }
   }, [goToDashView, drainQueue]);
 
-  // LUCY's animated face + live "Hey Lucy" status pill. Rendered fresh per call (a function, not a
-  // shared element, since both the header and the always-mounted dashboard may render it). It's placed
-  // either in the global header (non-dashboard screens) or inside the Home hero card (dashboard) — so
-  // on Home it sits in the greeting card and the Meeting/Listen pills stay clear.
+  // The "Hey Lucy" wake-word status pill (pinned top-right via styles.globalFace). LUCY's face itself is
+  // now the draggable <FloatingLucy> overlay (mounted once, below) — it occupies zero fixed layout space
+  // and can be moved anywhere, so it no longer lives in this fixed header slot.
   const renderLucyFace = () => (
-    <View style={styles.faceRow}>
-      {wakeWordEnabled && wakeStatus !== 'disabled' ? (
+    wakeWordEnabled && wakeStatus !== 'disabled' ? (
+      <View style={styles.faceRow}>
         <View style={styles.wakePill}>
           <View style={[styles.wakeDot, {
             backgroundColor: wakeStatus === 'listening' ? '#4ADE80'
@@ -823,25 +822,21 @@ export default function App() {
               : 'Starting…'}
           </Text>
         </View>
-      ) : null}
-      <AnimatedFace
-        unreadCount={0}
-        celebrateKey={refreshToken}
-        status={
-          voiceStatus === 'transcribing' ? 'saving'
-          : (meetingVisible || meetingRecording) ? 'reading'
-          : (voiceStatus === 'recording' || passiveState.status === 'listening') ? 'listening'
-          : convoOpen && convoState === 'speaking' ? 'speaking'
-          : convoOpen && convoState === 'listening' ? 'listening'
-          : convoOpen && convoState === 'thinking' ? 'thinking'
-          : processingActive ? 'organizing'
-          : (screen === 'dashboard' && dashCurrentView === 'Ask Lucy') ? 'thinking'
-          : 'idle'
-        }
-        onPress={() => { void import('./src/config/haptics').then(({ haptic }) => haptic.tab()).catch(() => {}); setConvoOpen(true); }}
-      />
-    </View>
+      </View>
+    ) : null
   );
+
+  // LUCY's status, derived once and fed to the floating face below.
+  const lucyStatus =
+    voiceStatus === 'transcribing' ? 'saving'
+    : (meetingVisible || meetingRecording) ? 'reading'
+    : (voiceStatus === 'recording' || passiveState.status === 'listening') ? 'listening'
+    : convoOpen && convoState === 'speaking' ? 'speaking'
+    : convoOpen && convoState === 'listening' ? 'listening'
+    : convoOpen && convoState === 'thinking' ? 'thinking'
+    : processingActive ? 'organizing'
+    : (screen === 'dashboard' && dashCurrentView === 'Ask Lucy') ? 'thinking'
+    : 'idle';
 
   // LUCY 2.0 — bring telemetry up once (no-op without keys), then track app lifecycle.
   useEffect(() => {
@@ -1060,8 +1055,7 @@ export default function App() {
         </View>
         {/* The conversation entry point now lives on Lucy's face itself (tap the face to talk).
             The old floating chat FAB was removed — face = talk to Lucy, bell = notifications. */}
-        {/* LUCY's animated face — a single global overlay pinned just below the header so it sits in
-            the same fixed spot on every screen (over the Home greeting card on the dashboard). */}
+        {/* "Hey Lucy" wake-word status pill — pinned top-right. (The face is the floating orb below.) */}
         <View style={styles.globalFace} pointerEvents="box-none">
           {renderLucyFace()}
         </View>
@@ -1072,6 +1066,19 @@ export default function App() {
           </TouchableOpacity>
         ) : null}
       </SafeAreaView>
+      {/* LUCY's face — a single global, DRAGGABLE floating orb. It occupies ZERO fixed layout space,
+          floats above every screen, and the user can drag it anywhere so it never covers what they're
+          reading (it docks to the nearest side on release and remembers where). Tapping it (without a
+          drag) opens the conversation, exactly like the old face. Mounted outside SafeAreaView so its
+          drag math uses true window coordinates; native Modals still render above it. */}
+      {ready && !showSplash ? (
+        <FloatingLucy
+          unreadCount={0}
+          celebrateKey={refreshToken}
+          status={lucyStatus}
+          onPress={() => { void import('./src/config/haptics').then(({ haptic }) => haptic.tab()).catch(() => {}); setConvoOpen(true); }}
+        />
+      ) : null}
       {/* Event acknowledge card — shown when the Dynamic Island banner is tapped. Tap anywhere to dismiss. */}
       <Modal visible={!!eventCard} transparent animationType="fade" onRequestClose={() => setEventCard(null)}>
         <TouchableOpacity activeOpacity={1} style={styles.eventCardOverlay} onPress={() => setEventCard(null)}>
@@ -1270,7 +1277,9 @@ const styles = StyleSheet.create({
   meetingHeaderPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 18, backgroundColor: 'rgba(239,68,68,0.1)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)', flexDirection: 'row', alignItems: 'center', gap: 5 },
   brainHeaderPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 18, backgroundColor: LUCY_COLORS.primarySoft, flexDirection: 'row', alignItems: 'center' },
   brainHeaderText: { color: LUCY_COLORS.primary, fontWeight: '700', fontSize: 11 },
-  container: { flex: 1, paddingHorizontal: 16, paddingTop: 0 },
+  // No horizontal padding here — each screen owns its own gutter (Capture/Dashboard/Settings). Adding it
+  // here too produced ~32-36px side padding (double-gutter) that wasted screen width.
+  container: { flex: 1, paddingHorizontal: 0, paddingTop: 0 },
   bottomNav: {
     flexDirection: 'row',
     backgroundColor: LUCY_COLORS.surfaceSheet,

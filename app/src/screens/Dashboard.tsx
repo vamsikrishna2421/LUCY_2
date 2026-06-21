@@ -16,7 +16,6 @@ import { FocusNowView } from './dashboard/FocusNowView';
 import { LibraryView, type LibraryTab } from './dashboard/LibraryView';
 import { HealthView } from './dashboard/HealthView';
 import { useDashboardData } from './hooks/useDashboardData';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text as DsText, Stack, SegmentedControl as DsSegmentedControl, tokens as dsTokens } from '../ui';
 
 const VIEW_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
@@ -43,7 +42,6 @@ export function DashboardScreen({ refreshToken, onAskAbout, requestedView, reque
   onViewChange?: (v: ViewMode) => void;
   initialAskQuestion?: string;
 }) {
-  const insets = useSafeAreaInsets();
   const [view, setView] = useState<ViewMode>('Timeline');
   const [tab, setTab] = useState<LibraryTab>('Home');
   const [contextRefresh, setContextRefresh] = useState(0);
@@ -78,7 +76,7 @@ export function DashboardScreen({ refreshToken, onAskAbout, requestedView, reque
       : 'Hold the mic or snap anything — I\'ll organize what matters.';
 
   return (
-    <View style={{ flex: 1, paddingHorizontal: dsTokens.spacing.base, paddingTop: insets.top + dsTokens.spacing.sm }}>
+    <View style={{ flex: 1, paddingHorizontal: dsTokens.spacing.base, paddingTop: dsTokens.spacing.sm }}>
       <Stack gap="xxs" style={{ marginBottom: dsTokens.spacing.md }}>
         <DsText variant="footnote" color="accent" weight="700">{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</DsText>
         <DsText variant="h1" numberOfLines={1}>{greetingForHour(new Date().getHours())}{userName ? `, ${userName}` : ''}</DsText>

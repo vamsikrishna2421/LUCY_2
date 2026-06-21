@@ -16,7 +16,7 @@ import { Animated, BackHandler, Keyboard, KeyboardAvoidingView, Platform, Scroll
 import { Ionicons } from '@expo/vector-icons';
 import {
   useToast, Text, Card, Surface, Row, Stack, Spacer, Divider, Button, IconButton,
-  Badge, LucyOrb, EmptyState, BottomSheet, TextField, Chip, PressableScale, FadeInUp, Stagger,
+  Badge, EmptyState, BottomSheet, TextField, Chip, PressableScale, FadeInUp, Stagger,
   useTheme, type Theme,
 } from '../ui';
 import { haptic } from '../config/haptics';
@@ -211,15 +211,14 @@ export function CaptureScreen({
       >
         {/* Hero — calm, alive (breathing orb), self-evident status */}
         <Stack gap="md" paddingX="lg" style={{ paddingTop: spacing.base }}>
-          <Row gap="base" align="center">
-            <LucyOrb size={52} active={voiceRecording} />
-            <View style={{ flex: 1 }}>
-              <Text variant="footnote" color="accent" weight="700">
-                {getGreeting()}{userName ? `, ${userName}` : ''}
-              </Text>
-              <Text variant="h1" tracking={-0.5}>LUCY</Text>
-            </View>
-          </Row>
+          {/* Greeting only — LUCY's face is the global floating orb (App.tsx), so no hero orb here
+              (having both produced two LUCY orbs on this screen). */}
+          <View>
+            <Text variant="footnote" color="accent" weight="700">
+              {getGreeting()}{userName ? `, ${userName}` : ''}
+            </Text>
+            <Text variant="h1" tracking={-0.5}>LUCY</Text>
+          </View>
 
           <Card level="surfaceAlt" border="accentLine">
             <Text variant="caption" color="accent" weight="700" tracking={1.2}>LUCY IS ACTIVE</Text>
