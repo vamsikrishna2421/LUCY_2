@@ -12,6 +12,9 @@ import { MeetingMode } from './src/components/MeetingMode';
 import { Onboarding } from './src/components/Onboarding';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { EntitlementProvider } from './src/billing';
+import { PaywallController } from './src/gating';
+import { initTelemetry, track } from './src/telemetry';
 import { LUCY_COLORS } from './src/config/colors';
 import { getDatabase } from './src/db';
 import { resetInterruptedCaptures } from './src/db/captures';
@@ -839,10 +842,20 @@ export default function App() {
     </View>
   );
 
+  // LUCY 2.0 — bring telemetry up once (no-op without keys), then track app lifecycle.
+  useEffect(() => {
+    initTelemetry();
+    track('app_open');
+    const sub = AppState.addEventListener('change', (s) => { if (s === 'active') track('app_foreground'); });
+    return () => sub.remove();
+  }, []);
+
   return (
    <ErrorBoundary>
     <GestureHandlerRootView style={{ flex: 1 }}>
     <SafeAreaProvider>
+     <EntitlementProvider>
+      <PaywallController>
       <SafeAreaView style={styles.safe}>
         <StatusBar style="light" />
         {/* Unified header shown on all screens — consistent controls everywhere */}
@@ -1169,6 +1182,8 @@ export default function App() {
         // Otherwise it's always available later from Settings → "Guided tour with Lucy".
         if (startTour) startGuidedTour(false);
       }} />
+      </PaywallController>
+     </EntitlementProvider>
     </SafeAreaProvider>
     </GestureHandlerRootView>
    </ErrorBoundary>

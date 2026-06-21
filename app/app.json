@@ -130,6 +130,7 @@
     },
     "plugins": [
       "./plugins/withExecutorchJar",
+      "@sentry/react-native",
       [
         "expo-live-activity",
         {

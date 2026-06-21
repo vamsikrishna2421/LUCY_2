@@ -10,6 +10,11 @@ import { LUCY_COLORS } from '../config/colors';
 
 async function logCrash(message: string, stack: string): Promise<void> {
   try {
+    // LUCY 2.0 — also forward to Sentry (no-op without DSN). Separate try so it never blocks dev_log.
+    const { captureError } = await import('../telemetry');
+    captureError(new Error(message), { stack: stack.slice(0, 1500) });
+  } catch { /* telemetry must never throw */ }
+  try {
     const { getDatabase } = await import('../db');
     const { insertDevLog } = await import('../db/devLog');
     const db = await getDatabase();

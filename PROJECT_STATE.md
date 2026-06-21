@@ -51,3 +51,12 @@ metrics dashboard) that 1.0 lacked. Ship something **real and runnable**, not va
   (Next.js metrics). Each owns a disjoint dir; orchestrator integrates centrally. Added CI workflow.
 - Next (on agent completion): install native deps centrally, wire providers into App.tsx, then begin
   Phase 1 seam read + Phase 2 IA, then Workstream F core-loop screen redesign.
+- 2026-06-21 (cont.): Phase 1 seam report done (docs/04). Owner provided: Anthropic test key (stored in
+  app/.env.local, git-ignored), EAS creds cached in PowerShell, Apple Developer creds (stored in
+  .secrets/, git-ignored). Build config set for 2.0: v2.0.0 / iOS build 2.0.0 / versionCode 105 /
+  runtime 6 / EAS autoIncrement — builds on top of existing app (bundle com.anonymous.lucy, ASC 6774077314).
+- Agents B/C/D (designsys, monetization, monitoring) COMPLETE — app/src/{ui,billing,gating,telemetry}
+  delivered (53 files). Agents A (cataloguer), E (dashboard), G (evaluator: Haiku vs Sonnet) RUNNING.
+- Model eval framed (docs/11): cost objective = least $/mo + most accurate at 600 extractions/mo;
+  Haiku ~$2.70 vs Sonnet ~$8.10 per user/mo; live accuracy benchmark in progress.
+- Installing native deps (react-native-purchases, @sentry/react-native, posthog-react-native) for integration.
