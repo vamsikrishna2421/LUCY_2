@@ -39,7 +39,7 @@ export function HealthView() {
   const toast = useToast();
   const health = useHealth();
 
-  const [tab, setTab] = useState<HealthTab>('Food');
+  const [tab, setTab] = useState<HealthTab>('Activity');
   const [health7, setHealth7] = useState<HealthSnapshot[]>([]);
   const [mood7, setMood7] = useState<Array<{ tone: string; created_at: string }>>([]);
   const [summary, setSummary] = useState<HealthSummary | null>(null);

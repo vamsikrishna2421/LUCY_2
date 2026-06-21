@@ -280,6 +280,11 @@ function formatHistory(history: AskTurn[]): string {
   return `CONVERSATION SO FAR (use this to understand follow-ups like "yes", "do that", "the first one"):\n${lines.join('\n')}\n\n`;
 }
 
+// Friendly names for the live screen keys passed from App.tsx (currentVoiceContext).
+const SCREEN_LABELS: Record<string, string> = {
+  timeline: 'Home / Timeline', tasks: 'Tasks', workspace: 'Workspace', ask: 'Ask Lucy', health: 'Health', settings: 'Settings',
+};
+
 async function answerWithLLM(question: string, history: AskTurn[] = [], screenContext?: string): Promise<LucyAnswer> {
   const db = await getDatabase();
   const [profile, deviceCtx, calEvents] = await Promise.all([
@@ -331,7 +336,7 @@ async function answerWithLLM(question: string, history: AskTurn[] = [], screenCo
 
   // No captures AND no health context to answer from → ask for input. (Health questions answer from the
   // profile, so they're allowed through even with an empty note history.)
-  if (!context.trim() && !healthPrefix) {
+  if (!context.trim() && !healthPrefix && !screenContext) {
     return {
       supported: true,
       answerKind: 'llm',
@@ -377,7 +382,7 @@ async function answerWithLLM(question: string, history: AskTurn[] = [], screenCo
   const input = [
     formatHistory(history) || null,
     `DEVICE CONTEXT (live data — always accurate):\n${deviceInfo}`,
-    screenContext ? `CURRENT APP SCREEN: ${screenContext}` : null,
+    screenContext ? `CURRENT APP SCREEN (live, always accurate): the user is viewing the "${SCREEN_LABELS[screenContext] ?? screenContext}" screen of the LUCY app right now. You DO know which screen they're on — answer questions about their current location / what page they're on directly and confidently.` : null,
     calendarInfo ? calendarInfo : null,
     galaxyContext,
     healthContext,

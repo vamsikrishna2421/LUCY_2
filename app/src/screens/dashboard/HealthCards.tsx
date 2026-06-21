@@ -19,7 +19,7 @@ export const TEAL = '#2DD4BF';
 export function HealthMetricCard({ icon, label, value, unit, sub, accent = TEAL, theme }: { icon: string; label: string; value: string | number | null; unit?: string; sub?: string; accent?: string; theme: Theme }) {
   const { spacing } = theme;
   return (
-    <Card level="surfaceAlt" padding="md" style={{ flex: 1 }}>
+    <Card level="surfaceAlt" padding="md" style={{ flex: 1, minHeight: 116 }}>
       <Text variant="h2">{icon}</Text>
       <Text variant="caption" weight="700" tracking={1.4} style={{ color: accent, textTransform: 'uppercase', marginTop: spacing.xs }}>{label}</Text>
       {value !== null && value !== undefined ? (
