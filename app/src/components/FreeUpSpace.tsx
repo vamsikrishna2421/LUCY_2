@@ -33,7 +33,7 @@ import {
 import { LUCY_COLORS } from '../config/colors';
 import { haptic } from '../config/haptics';
 import { getDatabase } from '../db';
-import { getLowImportanceCaptures, hardDeleteCapture, type CleanupCapture } from '../db/captures';
+import { getLowImportanceCaptures, hardDeleteCaptures, type CleanupCapture } from '../db/captures';
 import { ActionSheet, Toast } from './ActionSheet';
 import { LucyEmptyState } from './LucyEmptyState';
 
@@ -157,27 +157,38 @@ export function FreeUpSpace({
 
   const allLowSelected = lowCount > 0 && items.filter((i) => i.importance === 'low').every((i) => selected.has(i.id));
 
-  // ── Perform the deletes sequentially; skip failures quietly (no scary states) ──
+  const allSelected = items.length > 0 && items.every((i) => selected.has(i.id));
+  const toggleSelectAll = () => {
+    if (Platform.OS !== 'web') void haptic.tab();
+    setSelected((prev) => {
+      const everyPicked = items.length > 0 && items.every((i) => prev.has(i.id));
+      return everyPicked ? new Set() : new Set(items.map((i) => i.id));
+    });
+  };
+
+  // ── Delete every selected note in ONE batched transaction (fast even for hundreds) ──
   const performDelete = async () => {
     const ids = items.filter((i) => selected.has(i.id)).map((i) => i.id);
     if (ids.length === 0) return;
     setDeleting(true);
     if (Platform.OS !== 'web') void haptic.destructive();
     const db = await getDatabase();
-    const removed = new Set<number>();
-    for (const id of ids) {
-      try {
-        const ok = await hardDeleteCapture(db, id);
-        if (ok) removed.add(id);
-      } catch {
-        // One bad row never blocks the rest — skip it silently and keep going.
-      }
+    let ok = false;
+    try {
+      await hardDeleteCaptures(db, ids);
+      ok = true;
+    } catch {
+      // Atomic transaction — on any failure nothing was removed; degrade gently (no scary state).
+      ok = false;
     }
-    setItems((prev) => prev.filter((i) => !removed.has(i.id)));
+    if (ok) {
+      const removed = new Set(ids);
+      setItems((prev) => prev.filter((i) => !removed.has(i.id)));
+    }
     setSelected(new Set());
     setDeleting(false);
-    const n = removed.size;
-    setToast(n > 0 ? `Freed ${n} note${n === 1 ? '' : 's'}.` : 'Nothing to remove.');
+    const n = ok ? ids.length : 0;
+    setToast(n > 0 ? `Freed ${n} note${n === 1 ? '' : 's'}.` : 'Couldn’t free those — please try again.');
     if (n > 0) onChanged?.();
   };
 
@@ -185,7 +196,6 @@ export function FreeUpSpace({
   const footerY = footer.interpolate({ inputRange: [0, 1], outputRange: [120, 0] });
 
   return (
-    <>
       <Modal visible={visible} transparent animationType="none" statusBarTranslucent onRequestClose={onClose}>
         <Animated.View style={[styles.backdrop, { opacity: fade }]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
@@ -231,17 +241,30 @@ export function FreeUpSpace({
                       {items.length === 1 ? 'note can be cleared' : 'notes can be cleared'}
                     </Text>
                   </View>
-                  {lowCount > 0 ? (
+                  <View style={styles.chipGroup}>
+                    {/* Low-only shortcut — only when there's a meaningful low subset to single out. */}
+                    {lowCount > 0 && lowCount < items.length ? (
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        style={[styles.selectAllChip, allLowSelected && styles.selectAllChipOn]}
+                        onPress={selectAllLow}
+                      >
+                        <Text style={[styles.selectAllText, allLowSelected && styles.selectAllTextOn]}>
+                          {allLowSelected ? '✓ Low' : `Low · ${lowCount}`}
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
+                    {/* Select all (every loaded note), toggles to Clear. Always available. */}
                     <TouchableOpacity
                       activeOpacity={0.85}
-                      style={[styles.selectAllChip, allLowSelected && styles.selectAllChipOn]}
-                      onPress={selectAllLow}
+                      style={[styles.selectAllChip, allSelected && styles.selectAllChipOn]}
+                      onPress={toggleSelectAll}
                     >
-                      <Text style={[styles.selectAllText, allLowSelected && styles.selectAllTextOn]}>
-                        {allLowSelected ? '✓ All low selected' : `Select all low · ${lowCount}`}
+                      <Text style={[styles.selectAllText, allSelected && styles.selectAllTextOn]}>
+                        {allSelected ? '✓ Clear all' : `Select all · ${items.length}`}
                       </Text>
                     </TouchableOpacity>
-                  ) : null}
+                  </View>
                 </View>
 
                 <ScrollView
@@ -284,10 +307,11 @@ export function FreeUpSpace({
             ) : null}
           </Animated.View>
         </View>
-      </Modal>
 
-      {/* Designed confirm — never a raw Alert */}
+      {/* Designed confirm — EMBEDDED so it renders inside this Modal. A second stacked <Modal> silently
+          fails to present on iOS (the confirm never showed → "delete button didn't work"). */}
       <ActionSheet
+        embedded
         visible={confirming}
         onClose={() => setConfirming(false)}
         context="Free up space"
@@ -307,8 +331,8 @@ export function FreeUpSpace({
         cancelLabel="Keep them"
       />
 
-      <Toast visible={!!toast} message={toast ?? ''} onHide={() => setToast(null)} />
-    </>
+      <Toast embedded visible={!!toast} message={toast ?? ''} onHide={() => setToast(null)} />
+      </Modal>
   );
 }
 
@@ -412,6 +436,7 @@ const styles = StyleSheet.create({
   countBlock: { flexDirection: 'row', alignItems: 'baseline', gap: 8, flexShrink: 1 },
   countValue: { color: LUCY_COLORS.textDark, fontSize: 26, fontWeight: '900', letterSpacing: -0.5 },
   countLabel: { color: LUCY_COLORS.textSubtle, fontSize: 12.5, fontWeight: '700', flexShrink: 1 },
+  chipGroup: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
   selectAllChip: { borderRadius: 999, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.border, paddingHorizontal: 13, paddingVertical: 8 },
   selectAllChipOn: { backgroundColor: LUCY_COLORS.primarySoft, borderColor: LUCY_COLORS.primary },
   selectAllText: { color: LUCY_COLORS.textMuted, fontSize: 12, fontWeight: '800' },
