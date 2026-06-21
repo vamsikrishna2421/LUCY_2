@@ -22,8 +22,8 @@ metrics dashboard) that 1.0 lacked. Ship something **real and runnable**, not va
 | 0.2 Feature Catalog | BA agent | ⏳ in progress → `docs/10_FEATURE_CATALOG.md` |
 | 1 Seam report + interface contract | architect | ✅ `docs/04_SEAM_REPORT.md` — redesign safe, zero logic edits |
 | 2 IA / flows | orchestrator+UX | 🔜 |
-| 3 Design system (code) | design agent | ⏳ `app/src/ui/` |
-| 4 Build (screens, billing, telemetry, dashboard) | engineers | ⏳ |
+| 3 Design system (code) | design agent | ✅ `app/src/ui/` (34 primitives + motion/layout/theme) |
+| 4 Build | engineers | ⏳ billing+telemetry **integrated into App.tsx, 0 tsc errors**; dashboard running; screen redesign (F) next |
 | 5 QA (parity + constraints) | QA agent | 🔜 |
 
 ## Workstreams (parallel)
