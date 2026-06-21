@@ -7,13 +7,13 @@
  * quick questions, automation-intent confirm, all answer kinds (llm/memory/spending/schedule/tasks+
  * deadlines), action-plan apply, schedule commit, and the calm cold-start fallback.
  *
- * Exported name + props unchanged so App.tsx / Dashboard need no edit. A local ToastProvider is mounted
- * here (App.tsx mounts none) so non-scary feedback works without touching the root.
+ * Exported name + props unchanged so App.tsx / Dashboard need no edit. Toast (non-scary feedback)
+ * resolves from the root ToastProvider mounted in App.tsx — no per-screen provider.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { Keyboard, Platform, ScrollView, View } from 'react-native';
+import { BackHandler, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import {
-  ToastProvider, useToast, Text, Card, Surface, Row, Stack, Spacer, Button, IconButton, Chip,
+  useToast, Text, Card, Surface, Row, Stack, Spacer, Button, IconButton, Chip,
   SegmentedControl, TextField, EmptyState, SkeletonText, FadeInUp, Stagger, useTheme,
 } from '../ui';
 import { useAsk, type AskHistoryItem } from './hooks/useAsk';
@@ -40,15 +40,7 @@ const welcomeMessage: ChatMessage = {
 
 type AskView = 'new' | 'history' | 'insights' | 'thread';
 
-export function AskScreen(props: { initialQuestion?: string } = {}) {
-  return (
-    <ToastProvider>
-      <AskInner {...props} />
-    </ToastProvider>
-  );
-}
-
-function AskInner({ initialQuestion }: { initialQuestion?: string }) {
+export function AskScreen({ initialQuestion }: { initialQuestion?: string } = {}) {
   const { spacing } = useTheme();
   const toast = useToast();
   const ask = useAsk();
@@ -65,7 +57,6 @@ function AskInner({ initialQuestion }: { initialQuestion?: string }) {
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [pendingAction, setPendingAction] = useState<ExtractedAction | null>(null);
   const [executingAction, setExecutingAction] = useState(false);
-  const [keyboardOffset, setKeyboardOffset] = useState(0);
   const conversationRef = useRef<ScrollView>(null);
 
   const bubbleDeps: BubbleDeps = {
@@ -78,13 +69,12 @@ function AskInner({ initialQuestion }: { initialQuestion?: string }) {
     onScheduleError: (message) => toast.show({ message, tone: 'danger', icon: 'calendar-outline' }),
   };
 
+  // Android hardware back dismisses the inline automation-confirm card instead of exiting the app.
   useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const show = Keyboard.addListener(showEvent, (e) => setKeyboardOffset(e.endCoordinates.height));
-    const hide = Keyboard.addListener(hideEvent, () => setKeyboardOffset(0));
-    return () => { show.remove(); hide.remove(); };
-  }, []);
+    if (!pendingAction) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => { setPendingAction(null); return true; });
+    return () => sub.remove();
+  }, [pendingAction]);
 
   useEffect(() => { void loadInsights(); }, []); // insights is the default view
 
@@ -192,7 +182,7 @@ function AskInner({ initialQuestion }: { initialQuestion?: string }) {
   }
 
   return (
-    <View style={{ flex: 1, paddingBottom: keyboardOffset }}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       {/* Heading + view switcher */}
       <Stack gap="sm" style={{ marginBottom: spacing.sm }}>
         <Row justify="space-between" align="center">
@@ -263,6 +253,7 @@ function AskInner({ initialQuestion }: { initialQuestion?: string }) {
             style={{ flex: 1 }}
             contentContainerStyle={{ paddingBottom: spacing.md, gap: spacing.sm }}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
             onContentSizeChange={() => conversationRef.current?.scrollToEnd({ animated: true })}
           >
             {messages.map((message) => <MessageBubble key={message.id} message={message} deps={bubbleDeps} />)}
@@ -305,7 +296,7 @@ function AskInner({ initialQuestion }: { initialQuestion?: string }) {
           </Row>
         </>
       )}
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

@@ -38,6 +38,10 @@ export function Text({
   const t = typography[variant];
   return (
     <RNText
+      // Cap dynamic-type growth so the largest accessibility font scales don't break dense layouts
+      // (composer row, segmented control, stat rows). Still honours scaling up to 1.3×. Callers can
+      // override per-instance via the pass-through prop.
+      maxFontSizeMultiplier={1.3}
       style={[
         {
           fontSize: t.fontSize,

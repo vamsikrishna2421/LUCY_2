@@ -8,15 +8,14 @@
  * mark-done with optional note, done-today + undo, live capture replay, capture stats + streak,
  * next-event/top-task glance.
  *
- * The exported component name + props are unchanged so App.tsx needs no edit. A local ToastProvider is
- * mounted here (App.tsx mounts none) so the forgiveness model (Toast-with-undo) is available without
- * touching the root — see report's "needs a human ruling" note.
+ * The exported component name + props are unchanged so App.tsx needs no edit. Toast (forgiveness model:
+ * Toast-with-undo) resolves from the root ToastProvider mounted in App.tsx — no per-screen provider.
  */
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Keyboard, Platform, ScrollView, View } from 'react-native';
+import { Animated, BackHandler, Keyboard, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  ToastProvider, useToast, Text, Card, Surface, Row, Stack, Spacer, Divider, Button, IconButton,
+  useToast, Text, Card, Surface, Row, Stack, Spacer, Divider, Button, IconButton,
   Badge, LucyOrb, EmptyState, BottomSheet, TextField, Chip, PressableScale, FadeInUp, Stagger,
   useTheme, type Theme,
 } from '../ui';
@@ -56,23 +55,7 @@ function formatDoneTime(iso: string): string {
 }
 
 // ─── Public component (name + props frozen for App.tsx) ─────────────────────────
-export function CaptureScreen(props: {
-  refreshToken: number;
-  onQueued: () => void;
-  passiveState?: PassiveListenerState;
-  onToggleListen?: () => void;
-  backgroundEnabled?: boolean;
-  onBackgroundPress?: () => void;
-  onMeeting?: () => void;
-}) {
-  return (
-    <ToastProvider>
-      <CaptureInner {...props} />
-    </ToastProvider>
-  );
-}
-
-function CaptureInner({
+export function CaptureScreen({
   refreshToken,
   onQueued,
 }: {
@@ -90,7 +73,7 @@ function CaptureInner({
   const styles = makeStyles(theme);
 
   const [text, setText] = useState('');
-  const [keyboardOffset, setKeyboardOffset] = useState(0);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [sending, setSending] = useState(false);
   const [markedPrivate, setMarkedPrivate] = useState(false);
   const [done, setDone] = useState<DoneEntry[]>([]);
@@ -117,13 +100,22 @@ function CaptureInner({
     prevRecording.current = voiceRecording;
   }, [voiceRecording, micScale]);
 
+  // KeyboardAvoidingView handles the layout shift; this only toggles the "Done ▾" dismiss affordance.
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const show = Keyboard.addListener(showEvent, (e) => setKeyboardOffset(e.endCoordinates.height));
-    const hide = Keyboard.addListener(hideEvent, () => setKeyboardOffset(0));
+    const show = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
     return () => { show.remove(); hide.remove(); };
   }, []);
+
+  // Android hardware back dismisses the inline automation-confirm card instead of exiting the app.
+  // (The edit + category sheets are BottomSheets and the replay is a Modal — each traps back itself.)
+  useEffect(() => {
+    if (!pendingAction) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => { setPendingAction(null); return true; });
+    return () => sub.remove();
+  }, [pendingAction]);
 
   // ── Send capture (automation-intent first, then enqueue + background replay) — parity with 1.0 ──
   const sendCapture = async () => {
@@ -206,11 +198,15 @@ function CaptureInner({
   const topTask = todos.find((t) => t.urgency === 'high') ?? todos[0];
 
   return (
-    <View style={[styles.container, { paddingBottom: keyboardOffset }]}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       <ScrollView
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         contentContainerStyle={{ paddingBottom: spacing.md }}
       >
         {/* Hero — calm, alive (breathing orb), self-evident status */}
@@ -349,7 +345,7 @@ function CaptureInner({
 
       {/* Composer dock — receipt, voice, text, send */}
       <Surface level="bg" radius="none" style={styles.composerDock}>
-        {keyboardOffset > 0 ? (
+        {keyboardVisible ? (
           <PressableScale onPress={() => Keyboard.dismiss()} accessibilityLabel="Dismiss keyboard" style={{ alignSelf: 'flex-end' }}>
             <Text variant="footnote" color="accent" weight="700" style={{ paddingHorizontal: spacing.base, paddingVertical: spacing.xs }}>Done ▾</Text>
           </PressableScale>
@@ -449,7 +445,7 @@ function CaptureInner({
       {replayExtraction ? (
         <CaptureReplay extraction={replayExtraction} onDismiss={() => setReplayExtraction(null)} />
       ) : null}
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

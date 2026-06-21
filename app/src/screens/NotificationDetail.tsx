@@ -1,5 +1,17 @@
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { LUCY_COLORS } from '../config/colors';
+/**
+ * NotificationDetail — LUCY 2.0 "from LUCY" explanation dialog.
+ *
+ * Rebuilt on the design system (app/src/ui). This screen is pure presentation: it imports no frozen
+ * logic, so there is no seam hook — `buildExplanation` is local copy-shaping and is preserved verbatim
+ * from 1.0 (every payload kind → same headline + explanation strings). Only the chrome moves onto ui/
+ * primitives (Surface dialog, Text scale, Button, Badge), gaining safe-area + Android-back parity.
+ *
+ * The exported component name + props (`NotificationDetailModal`, `NotificationDetailPayload`) are
+ * unchanged so App.tsx needs no edit.
+ */
+import { Modal, Pressable, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Surface, Text, Button, Badge, Stack, Spacer, useTheme } from '../ui';
 
 export type NotificationDetailPayload =
   | { kind: 'guardian'; entityNames: string[]; evidenceCount: number; message?: string }
@@ -101,83 +113,42 @@ interface Props {
 }
 
 export function NotificationDetailModal({ payload, onDismiss }: Props) {
+  const { colors, spacing } = useTheme();
+  const insets = useSafeAreaInsets();
   if (!payload) return null;
   const { headline, explanation } = buildExplanation(payload);
 
   return (
-    <Modal transparent animationType="fade" visible onRequestClose={onDismiss}>
-      <Pressable style={styles.backdrop} onPress={onDismiss}>
-        <Pressable style={styles.card}>
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>from LUCY</Text>
-          </View>
-          <Text style={styles.headline}>{headline}</Text>
-          <Text style={styles.explanation}>{explanation}</Text>
-          <Pressable style={styles.button} onPress={onDismiss}>
-            <Text style={styles.buttonText}>got it</Text>
-          </Pressable>
+    <Modal transparent animationType="fade" visible onRequestClose={onDismiss} statusBarTranslucent>
+      <Pressable
+        onPress={onDismiss}
+        style={{
+          flex: 1,
+          backgroundColor: colors.scrim,
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: spacing.xl,
+          paddingTop: spacing.xl + insets.top,
+          paddingBottom: spacing.xl + insets.bottom,
+        }}
+      >
+        {/* Inner Pressable swallows taps so the card itself doesn't dismiss. */}
+        <Pressable style={{ width: '100%', maxWidth: 380 }}>
+          <Surface level="surface" radius="xl" elevation="e4" border="accentLine" padding="xl">
+            <View style={{ alignSelf: 'flex-start' }}>
+              <Badge label="from LUCY" tone="accent" />
+            </View>
+            <Spacer size="base" />
+            <Text variant="h2">{headline}</Text>
+            <Spacer size="md" />
+            <Text variant="body" color="textSecondary">{explanation}</Text>
+            <Spacer size="xl" />
+            <Stack gap="none">
+              <Button label="got it" onPress={onDismiss} fullWidth />
+            </Stack>
+          </Surface>
         </Pressable>
       </Pressable>
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.78)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  card: {
-    backgroundColor: LUCY_COLORS.surface,
-    borderRadius: 20,
-    padding: 28,
-    borderWidth: 1,
-    borderColor: LUCY_COLORS.primarySoft,
-    width: '100%',
-    maxWidth: 380,
-  },
-  badge: {
-    alignSelf: 'flex-start',
-    backgroundColor: LUCY_COLORS.primarySoft,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginBottom: 16,
-  },
-  badgeText: {
-    color: LUCY_COLORS.primaryGlow,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-  },
-  headline: {
-    color: LUCY_COLORS.textDark,
-    fontSize: 22,
-    fontWeight: '800',
-    lineHeight: 30,
-    marginBottom: 14,
-    letterSpacing: -0.3,
-  },
-  explanation: {
-    color: LUCY_COLORS.textMuted,
-    fontSize: 16,
-    lineHeight: 25,
-    marginBottom: 28,
-  },
-  button: {
-    backgroundColor: LUCY_COLORS.primary,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: LUCY_COLORS.white,
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: -0.2,
-  },
-});

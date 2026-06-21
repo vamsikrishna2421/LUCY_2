@@ -45,7 +45,10 @@ export function LucyOrb({ size = 64, active = false, halo = true, style }: LucyO
     inputRange: [0, 1],
     outputRange: active ? [0.25, 0.5] : [0.15, 0.34],
   });
-  const gradId = React.useId();
+  // React.useId() returns ids containing ':' (e.g. ":r0:"). SVG ids referenced via url(#id) must not
+  // contain ':' — on Android the gradient silently fails to resolve and the orb renders unfilled.
+  // Strip non-alphanumerics to keep a valid, still-unique id.
+  const gradId = `lucyOrb${React.useId().replace(/[^a-zA-Z0-9]/g, '')}`;
 
   return (
     <View style={[{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }, style]}>
