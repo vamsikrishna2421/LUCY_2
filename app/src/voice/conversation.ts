@@ -24,6 +24,10 @@ export interface ConvoSnapshot { state: ConvoState; turns: ConvoTurn[]; partial:
 // Spoken phrases that end the conversation. Kept conservative so normal mid-chat words don't end it.
 const END_RE = /\b(stop listening|stop conversation|end conversation|never mind|that'?s all|that is all|that'?s it|that is it|good ?bye|^bye$|we'?re done|i'?m done|i'?m good|all done|all set|thank you|thanks|that'?ll be all|that'?ll do)\b/i;
 
+// Close the conversation after this long with no speech from the user (hands-free auto-timeout) so it
+// never "keeps listening" forever.
+const SILENCE_MS = 11000;
+
 class ConversationManager {
   private state: ConvoState = 'off';
   private turns: ConvoTurn[] = [];
@@ -38,6 +42,8 @@ class ConversationManager {
   private subs: Array<{ remove(): void }> = [];
   private listeners = new Set<(s: ConvoSnapshot) => void>();
   private endTimer: ReturnType<typeof setTimeout> | null = null;
+  private silenceTimer: ReturnType<typeof setTimeout> | null = null;
+  private audioRetries = 0; // consecutive transient audio-capture failures before we give up
   private convId: number | null = null; // persisted voice-conversation row (for review later)
 
   /** Fire-and-forget persist of one turn so conversations are reviewable in-app + on the web. */
@@ -62,6 +68,19 @@ class ConversationManager {
   private emit(): void { const s = this.snapshot(); for (const l of this.listeners) l(s); }
   private set(state: ConvoState): void { this.state = state; this.emit(); }
   getState(): ConvoState { return this.state; }
+
+  /** (Re)start the no-speech countdown. Fires a calm, silent end if the user stays quiet. */
+  private armSilence(): void {
+    if (this.silenceTimer) clearTimeout(this.silenceTimer);
+    this.silenceTimer = setTimeout(() => {
+      // User went quiet — close the conversation without speaking (so we don't reopen the mic). This is
+      // what stops "it kept listening and never stopped".
+      if (this.active) void this.end();
+    }, SILENCE_MS);
+  }
+  private clearSilence(): void {
+    if (this.silenceTimer) { clearTimeout(this.silenceTimer); this.silenceTimer = null; }
+  }
 
   async start(opts?: { context?: string; getContext?: () => string; onNavigate?: (section: string) => void; initialText?: string }): Promise<void> {
     if (this.state !== 'off') return;
@@ -124,6 +143,7 @@ class ConversationManager {
         if (this.state !== 'listening') return;
         const text = e.results[0]?.transcript?.trim() ?? '';
         if (!text) return;
+        this.armSilence(); // user is speaking — reset the silence countdown
         if (!e.isFinal) { this.partial = text; this.emit(); return; }
         this.partial = '';
         void this.handleUtterance(text);
@@ -134,6 +154,18 @@ class ConversationManager {
         // also hold the recognizer). Never end the conversation over it — just resume listening.
         if (e.error === 'interrupted') {
           if (this.state === 'listening') { this.endTimer = setTimeout(() => this.startRecognition(), 350); }
+          return;
+        }
+        // 'audio-capture' (iOS kAFAssistantErrorDomain 209) is usually a transient audio-session blip as
+        // TTS hands the session back. Retry a couple of times, then close calmly — never surface a scary
+        // error card mid-conversation.
+        if (e.error === 'audio-capture') {
+          if (this.state === 'listening' && this.audioRetries < 2) {
+            this.audioRetries++;
+            this.endTimer = setTimeout(() => this.startRecognition(), 500);
+            return;
+          }
+          void this.end();
           return;
         }
         this.fail(`Voice error (${e.error}). ${e.message || ''}`.trim());
@@ -151,6 +183,7 @@ class ConversationManager {
   private beginListening(): void {
     if (!this.active) return;
     this.set('listening');
+    this.armSilence();
     this.startRecognition();
   }
 
@@ -163,7 +196,10 @@ class ConversationManager {
         continuous: true,
         requiresOnDeviceRecognition: this.onDevice,
         addsPunctuation: true,
-        iosCategory: { category: 'playAndRecord', categoryOptions: ['defaultToSpeaker', 'allowBluetooth'], mode: 'measurement' },
+        // 'voiceChat' enables Apple's voice-processing I/O (acoustic echo cancellation + noise
+        // suppression). 'measurement' disabled it, so LUCY heard her own TTS through the speaker and
+        // answered herself — the runaway "kept listening / talking back" loop.
+        iosCategory: { category: 'playAndRecord', categoryOptions: ['defaultToSpeaker', 'allowBluetooth'], mode: 'voiceChat' },
       });
     } catch (e) {
       this.fail(`Could not start listening. ${e instanceof Error ? e.message : String(e)}`);
@@ -172,6 +208,8 @@ class ConversationManager {
 
   private async handleUtterance(text: string): Promise<void> {
     if (!this.active) return;
+    this.clearSilence();   // we're handling a turn now; silence countdown re-arms when we listen again
+    this.audioRetries = 0; // a real result means capture is healthy
     // Only end when the end-phrase is essentially the WHOLE utterance (≤5 words) — so "I'm done with
     // the report, schedule a break" keeps the conversation going instead of hanging up mid-command.
     if (END_RE.test(text) && text.trim().split(/\s+/).length <= 5) {
@@ -209,6 +247,10 @@ class ConversationManager {
     this.set('speaking');
     await speak(reply);
     if (!this.active) return;
+    // Let the audio session settle from playback→record before reopening the mic (reduces residual echo
+    // and the iOS audio-capture error from switching too fast).
+    await new Promise((r) => setTimeout(r, 300));
+    if (!this.active) return;
     // If the user barged in (interrupt() flipped us to 'listening' mid-speech), don't double-start.
     if (this.state === 'speaking') this.beginListening(); // back to the user
   }
@@ -241,6 +283,7 @@ class ConversationManager {
 
   async end(): Promise<void> {
     if (this.endTimer) { clearTimeout(this.endTimer); this.endTimer = null; }
+    this.clearSilence();
     this.active = false;
     // Finalize the persisted conversation (marks ended_at; drops it if nothing was said).
     const finishId = this.convId; this.convId = null;
