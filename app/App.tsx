@@ -15,6 +15,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { EntitlementProvider } from './src/billing';
 import { PaywallController } from './src/gating';
 import { initTelemetry, track } from './src/telemetry';
+import { ThemeProvider, ToastProvider } from './src/ui';
 import { LUCY_COLORS } from './src/config/colors';
 import { getDatabase } from './src/db';
 import { resetInterruptedCaptures } from './src/db/captures';
@@ -854,8 +855,10 @@ export default function App() {
    <ErrorBoundary>
     <GestureHandlerRootView style={{ flex: 1 }}>
     <SafeAreaProvider>
-     <EntitlementProvider>
-      <PaywallController>
+     <ThemeProvider>
+      <ToastProvider>
+       <EntitlementProvider>
+        <PaywallController>
       <SafeAreaView style={styles.safe}>
         <StatusBar style="light" />
         {/* Unified header shown on all screens — consistent controls everywhere */}
@@ -1182,8 +1185,10 @@ export default function App() {
         // Otherwise it's always available later from Settings → "Guided tour with Lucy".
         if (startTour) startGuidedTour(false);
       }} />
-      </PaywallController>
-     </EntitlementProvider>
+        </PaywallController>
+       </EntitlementProvider>
+      </ToastProvider>
+     </ThemeProvider>
     </SafeAreaProvider>
     </GestureHandlerRootView>
    </ErrorBoundary>
