@@ -19,7 +19,7 @@ metrics dashboard) that 1.0 lacked. Ship something **real and runnable**, not va
 | Phase | Owner | Status |
 |-------|-------|--------|
 | 0.1 File-tree inventory | orchestrator | ✅ `docs/00_FILE_TREE_INVENTORY.md` |
-| 0.2 Feature Catalog | BA agent | ⏳ in progress → `docs/10_FEATURE_CATALOG.md` |
+| 0.2 Feature Catalog | BA agent | ✅ LOCKED `docs/10_FEATURE_CATALOG.md` — 470 rows; 5 rulings parked in NEEDS_FROM_YOU §G |
 | 1 Seam report + interface contract | architect | ✅ `docs/04_SEAM_REPORT.md` — redesign safe, zero logic edits |
 | 2 IA / flows | orchestrator+UX | 🔜 |
 | 3 Design system (code) | design agent | ✅ `app/src/ui/` (34 primitives + motion/layout/theme) |

@@ -36,3 +36,27 @@ back; nothing below is blocking. Grouped by when you'll need it.
 - Next.js + Vercel for the dashboard.
 
 _Status: all of the above are stubbed; the app and dashboard build and run without them._
+
+## G. Bug/not-bug rulings (from the Feature Catalog — interim default = preserve 1.0; override anytime)
+The catalog (`docs/10_FEATURE_CATALOG.md`, 470 rows) surfaced 5 behaviors where 1.0 is ambiguous or
+contradicts its own docs. Logic is frozen, so the build **preserves current 1.0 behavior** for all 5 until you
+rule. Recommendation per item:
+
+1. **LAN companion server has NO auth** (SRV-004) — ships with `ServerState.pin = null` + a "security comes
+   later" comment, yet the inventory + in-app manual claim it's "PIN-gated."
+   **Recommendation: REAL BUG → fix in 2.0** (require a PIN before the LAN server exposes memory). Security gap
+   on a feature that already promises protection. _Interim: unchanged._ Needs your OK to change logic.
+2. **Self-improving brain disabled by default** (PROC-138) — `proposeMemoryUpdates` gated off
+   (`AUTO_MEMORY_UPDATES_ENABLED=false`); apply-path + table live but dormant.
+   **Recommendation: preserve disabled**; optionally expose in 2.0 behind an opt-in review card. _Interim: preserved._
+3. **`config.remoteProvider` pinned 'openai' but real default model is Claude Sonnet** (CFG-002 vs AI-046) —
+   routing keys off the selected model, not `remoteProvider`. **Recommendation: keep model-based routing; do NOT
+   "simplify" to trust `remoteProvider`** (would misroute Claude users to OpenAI). _Interim: preserved (guardrail)._
+4. **Two automation paths both wired** (PROC-102/103) — legacy regex action path + newer LLM
+   `detected_action`/`pending_actions` flow. **Recommendation: preserve both**; verify the legacy path is dead
+   before removing. _Interim: preserved._
+5. **MusicDetector is a stub** (AUD-019) — ShazamKit removed (returns null), but ACR keys, `db/musicCaptures` +
+   dedup, and passive-music knobs remain dormant. **Recommendation: preserve dormant** or drop for cleanliness —
+   your call. _Interim: preserved._
+
+Only #1 (security) is one I'd push to fix proactively. None block the redesign.
