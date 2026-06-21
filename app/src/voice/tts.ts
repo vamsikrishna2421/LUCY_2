@@ -76,13 +76,27 @@ export async function listVoices(): Promise<TtsVoice[]> {
   } catch { return []; }
 }
 
+/**
+ * Strip emoji + markdown markers so TTS doesn't read them aloud ("red circle", "asterisk", etc.).
+ * The on-screen text keeps its formatting; only the spoken string is cleaned.
+ */
+function sanitizeForSpeech(text: string): string {
+  return (text || '')
+    // emoji & pictographs (e.g. 🔴 → removed)
+    .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{200D}]/gu, '')
+    // markdown emphasis / bullets / headings
+    .replace(/[*_`~#>]/g, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
+
 /** Speak text aloud. Resolves when speech finishes (or immediately if TTS is unavailable). */
 export async function speak(
   text: string,
   opts?: { onStart?: () => void; rate?: number; pitch?: number; language?: string },
 ): Promise<void> {
   const S = await speech();
-  const clean = (text || '').trim();
+  const clean = sanitizeForSpeech(text);
   if (!S || !clean) return;
   if (!prefsLoaded) await loadVoicePrefs();
   return new Promise<void>((resolve) => {

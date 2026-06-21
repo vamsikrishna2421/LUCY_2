@@ -82,12 +82,19 @@ function isLucyToken(word: string): boolean {
   return false;
 }
 
-/** True if a spoken word is a plausible "hey" — the required wake prefix, tolerant of mishearings. */
+/** True if a spoken word is a plausible "hey" — the required wake prefix, tolerant of accents/mishearings. */
 function isHeyToken(word: string): boolean {
   const raw = (word || '').toLowerCase().replace(/[^a-z]/g, '');
   if (!raw) return false;
-  if (['hey', 'hay', 'hai', 'heya', 'heyy', 'hi', 'ay', 'he', 'hej'].includes(raw)) return true;
+  if (['hey', 'hay', 'hai', 'haye', 'heya', 'heyy', 'hi', 'ay', 'aye', 'ey', 'he', 'hae', 'hei', 'hej'].includes(raw)) return true;
   return levenshtein(raw, 'hey') <= 1;
+}
+
+/** "heylucy" / "hilucy" / "halucy" said as a single run-together token (recognizer didn't split them). */
+function isHeyLucyMerged(word: string): boolean {
+  const raw = (word || '').toLowerCase().replace(/[^a-z]/g, '');
+  const m = raw.match(/^h(?:ey|ay|ai|i|a|e)(.+)$/);
+  return !!m && m[1].length >= 2 && isLucyToken(m[1]);
 }
 
 export type WakeWordStatus = 'disabled' | 'starting' | 'listening' | 'unavailable';
@@ -253,9 +260,12 @@ class WakeWordListener {
           // (last 6 tokens) from the end and take the latest Lucy-like token.
           const start = Math.max(0, tokens.length - 6);
           let matchIdx = -1;
-          // Require "hey" immediately before "lucy" — bare "Lucy" in normal speech was waking her up.
+          // Accept "hey" within the TWO tokens before "lucy" (handles "hey, lucy" / "hey um lucy" and the
+          // recognizer dropping a beat), OR a single run-together "heylucy". Bare "Lucy" with no nearby
+          // "hey" is still ignored so normal speech doesn't wake her. Fuzzy on both words for accents.
           for (let t = tokens.length - 1; t >= start; t--) {
-            if (isLucyToken(tokens[t]) && t > 0 && isHeyToken(tokens[t - 1])) { matchIdx = t; break; }
+            if (isLucyToken(tokens[t]) && (isHeyToken(tokens[t - 1] ?? '') || isHeyToken(tokens[t - 2] ?? ''))) { matchIdx = t; break; }
+            if (isHeyLucyMerged(tokens[t])) { matchIdx = t; break; }
           }
           if (matchIdx === -1) continue;
           if (Date.now() < this.cooldownUntil) return;

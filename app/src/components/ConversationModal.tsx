@@ -19,6 +19,9 @@ import {
 import { LUCY_COLORS as C } from '../config/colors';
 import { conversation, type ConvoSnapshot } from '../voice/conversation';
 
+/** Strip markdown markers for on-screen display (emoji stay as visual bullets). */
+const stripMd = (s: string): string => s.replace(/[*`#]/g, '').replace(/[ \t]{2,}/g, ' ').trim();
+
 interface Props {
   visible: boolean;
   context?: string;
@@ -48,6 +51,10 @@ export default function ConversationModal({
   // Dot opacity for the "thinking" pulsing animation.
   const dotOpacity = useRef(new Animated.Value(1)).current;
   const dotLoop = useRef<Animated.CompositeAnimation | null>(null);
+  // Auto-scroll the reply through its full length while Lucy speaks (timing estimated from word count).
+  const scrollRef = useRef<ScrollView>(null);
+  const contentH = useRef(0);
+  const viewH = useRef(0);
   // Seconds left before the card self-dismisses after Lucy ends the conversation (null = not counting).
   const AUTO_DISMISS_SECONDS = 4;
   const [dismissIn, setDismissIn] = useState<number | null>(null);
@@ -124,6 +131,24 @@ export default function ConversationModal({
   // Find the last message Lucy spoke.
   const lastLucyTurn = [...snap.turns].reverse().find((t) => t.role === 'lucy');
 
+  // While Lucy speaks, gently scroll the reply from top to bottom over its estimated spoken duration so
+  // later points (e.g. item 3) come into view as she reads them, instead of staying clipped.
+  useEffect(() => {
+    if (snap.state !== 'speaking' || !lastLucyTurn?.text) return;
+    const words = lastLucyTurn.text.trim().split(/\s+/).filter(Boolean).length;
+    const durationMs = Math.max(2500, words * 360); // ~165 words/min
+    const startedAt = Date.now();
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+    const id = setInterval(() => {
+      const max = Math.max(0, contentH.current - viewH.current);
+      if (max <= 4) return;
+      const p = Math.min(1, (Date.now() - startedAt) / durationMs);
+      scrollRef.current?.scrollTo({ y: max * p, animated: false });
+      if (p >= 1) clearInterval(id);
+    }, 90);
+    return () => clearInterval(id);
+  }, [lastLucyTurn?.text, snap.state]);
+
   if (!visible && snap.state === 'off') return null;
 
   return (
@@ -165,14 +190,17 @@ export default function ConversationModal({
           {/* Lucy's last message — scrollable so long replies (10+ lines) are fully readable while she
               speaks, instead of being clipped to the first few lines. */}
           <ScrollView
+            ref={scrollRef}
             style={styles.lucyScroll}
             contentContainerStyle={styles.lucyTextWrap}
             showsVerticalScrollIndicator
             nestedScrollEnabled
             keyboardShouldPersistTaps="handled"
+            onLayout={(e) => { viewH.current = e.nativeEvent.layout.height; }}
+            onContentSizeChange={(_w, h) => { contentH.current = h; }}
           >
             {lastLucyTurn ? (
-              <Text style={styles.lucyText}>{lastLucyTurn.text}</Text>
+              <Text style={styles.lucyText}>{stripMd(lastLucyTurn.text)}</Text>
             ) : snap.state === 'listening' ? (
               <Text style={styles.lucyPlaceholder}>What's up?</Text>
             ) : null}
@@ -284,7 +312,7 @@ const styles = StyleSheet.create({
 
   // Lucy's last reply text area (scrollable; caps the card height so it stays compact).
   lucyScroll: {
-    maxHeight: 150,
+    maxHeight: 240,
     marginBottom: 6,
   },
   lucyTextWrap: {
