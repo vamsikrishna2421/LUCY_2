@@ -166,3 +166,16 @@ create policy "own usage"          on public.usage_events    for select using (a
 create policy "own activity"       on public.activity_events for select using (auth.uid() = user_id);
 create policy "plans are readable" on public.plans           for select using (true);
 -- Writes to usage/subscriptions happen ONLY via the backend (service_role) — no client write policies.
+
+-- ── Security hardening (mirrors the applied migrations; keeps the Supabase linter clean) ──
+-- Admin views run as the caller AND are restricted to the backend service_role, so a signed-in
+-- user can never read other users' aggregated stats.
+alter view public.admin_usage_hourly set (security_invoker = on);
+alter view public.admin_usage_daily  set (security_invoker = on);
+alter view public.admin_user_stats   set (security_invoker = on);
+revoke all on public.admin_usage_hourly from anon, authenticated;
+revoke all on public.admin_usage_daily  from anon, authenticated;
+revoke all on public.admin_user_stats   from anon, authenticated;
+-- Pin function search_path; keep the new-user trigger function off the public RPC surface.
+alter function public.period_token_usage(uuid, timestamptz) set search_path = public;
+revoke execute on function public.handle_new_user() from public;
