@@ -63,3 +63,7 @@ Thumbs.db
 ask_work.json
 hist_work.json
 lucy1_src/
+
+# SaaS backend secrets
+backend/.env
+backend/.env.*
