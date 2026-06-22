@@ -41,12 +41,17 @@ async function openDatabase(): Promise<SQLite.SQLiteDatabase> {
  */
 async function openDatabaseWithRetry(): Promise<SQLite.SQLiteDatabase> {
   let lastError: unknown;
-  for (let attempt = 0; attempt < 4; attempt++) {
+  // Spread retries over ~11s of wall-clock time. The transient cold-start race ("cannot rollback - no
+  // transaction is active") settles a few seconds in — a quick burst of retries isn't enough, but a
+  // PATIENT one recovers on its own (exactly what a manual close+reopen was doing), so the user almost
+  // never sees the fallback card.
+  const backoffsMs = [0, 1500, 3500, 6000];
+  for (let i = 0; i < backoffsMs.length; i++) {
+    if (backoffsMs[i] > 0) await new Promise((resolve) => setTimeout(resolve, backoffsMs[i]));
     try {
       return await openDatabase();
     } catch (e) {
       lastError = e;
-      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
     }
   }
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
