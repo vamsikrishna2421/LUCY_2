@@ -96,6 +96,7 @@ export default function App() {
   const [refreshToken, setRefreshToken] = useState(0);
   const [ready, setReady] = useState(false);
   const [startupError, setStartupError] = useState('');
+  const [retryKey, setRetryKey] = useState(0);
   const [backgroundEnabled, setBackgroundEnabled] = useState(false);
   const [notificationDetail, setNotificationDetail] = useState<NotificationDetailPayload | null>(null);
   const [approvalTrigger, setApprovalTrigger] = useState(0);
@@ -256,7 +257,8 @@ export default function App() {
         Animated.timing(splashFade, { toValue: 0, duration: 400, useNativeDriver: true }).start(() => setShowSplash(false));
       }
     })();
-  }, [drainQueue]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drainQueue, retryKey]);
 
   useEffect(() => {
     if (!ready || receivingShare.current) {
@@ -926,7 +928,19 @@ export default function App() {
           </Animated.View>
         ) : null}
         <View style={styles.container}>
-          {startupError ? <Text style={styles.error}>{startupError}</Text> : null}
+          {startupError ? (
+            <View style={{ margin: 24, padding: 20, borderRadius: 18, backgroundColor: LUCY_COLORS.surface, borderWidth: 1, borderColor: LUCY_COLORS.borderSoft, alignItems: 'center', gap: 10 }}>
+              <Text style={{ color: LUCY_COLORS.textDark, fontSize: 17, fontWeight: '800' }}>LUCY had trouble starting</Text>
+              <Text style={{ color: LUCY_COLORS.textMuted, fontSize: 13, textAlign: 'center', lineHeight: 19 }}>This usually clears itself — tap to try again. Your data is safe.</Text>
+              <TouchableOpacity
+                style={{ marginTop: 6, backgroundColor: LUCY_COLORS.primary, borderRadius: 12, paddingHorizontal: 22, paddingVertical: 11 }}
+                activeOpacity={0.9}
+                onPress={() => { setStartupError(''); setReady(false); setShowSplash(true); splashFade.setValue(1); setRetryKey((k) => k + 1); }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>Try again</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
           {/* Loading is handled by SplashAnimation overlay */}
           {/* Screens are always mounted once ready so their state (captures, etc.)
               survives tab switches — the Dashboard in particular must not remount from

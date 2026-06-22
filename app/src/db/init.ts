@@ -1,10 +1,12 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 export async function initializeSchema(db: SQLiteDatabase): Promise<void> {
+  // Run these PRAGMAs on their OWN, before the schema script. `journal_mode = WAL` cannot be applied
+  // inside a transaction, and bundling it into the big multi-statement CREATE-TABLE script was a source
+  // of transient cold-start failures on Android ("cannot rollback - no transaction is active").
+  await db.execAsync('PRAGMA journal_mode = WAL;');
+  await db.execAsync('PRAGMA foreign_keys = ON;');
   await db.execAsync(`
-    PRAGMA journal_mode = WAL;
-    PRAGMA foreign_keys = ON;
-
     CREATE TABLE IF NOT EXISTS captures (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
