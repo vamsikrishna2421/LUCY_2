@@ -607,7 +607,35 @@ async function segmentAndIngestDayJournal(
   return segments.length;
 }
 
+// ── Single-flight guard ──────────────────────────────────────────────────────
+// processQueue() is fired void-style from ~10 call sites (capture, LAN server, Dashboard
+// focus, voice router, merge, photo capture, …). expo-sqlite has ONE connection and
+// persistExtraction wraps each capture in db.withTransactionAsync. Two concurrent loops
+// would interleave BEGIN/COMMIT on that single connection — "cannot start a transaction
+// within a transaction" / "cannot rollback - no transaction is active" — aborting the
+// transaction AFTER the AI extraction already ran, leaving the capture orphaned at
+// processed = 2 ("Organizing your thought…" forever, until a restart runs
+// resetInterruptedCaptures). Serialize: if a run is already in flight, ask it to drain once
+// more when it finishes (so rows enqueued mid-run aren't missed) and return immediately.
+let queueRunning = false;
+let queueRerunRequested = false;
+
 export async function processQueue(onChange?: () => void, maxCaptures = Number.POSITIVE_INFINITY): Promise<number> {
+  if (queueRunning) { queueRerunRequested = true; return 0; }
+  queueRunning = true;
+  try {
+    let total = await drainQueueOnce(onChange, maxCaptures);
+    while (queueRerunRequested) {
+      queueRerunRequested = false;
+      total += await drainQueueOnce(onChange, maxCaptures);
+    }
+    return total;
+  } finally {
+    queueRunning = false;
+  }
+}
+
+async function drainQueueOnce(onChange?: () => void, maxCaptures = Number.POSITIVE_INFINITY): Promise<number> {
   const db = await getDatabase();
   let processedCount = 0;
   while (processedCount < maxCaptures) {
