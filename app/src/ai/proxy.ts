@@ -13,7 +13,7 @@ import { getSetting } from '../db/settings';
 
 /** Set to the deployed backend origin (e.g. https://lucy-xxx.vercel.app) to enable managed AID,
  *  or leave empty and set the `backend_base_url` DB setting at runtime. */
-const DEFAULT_BACKEND_URL = '';
+const DEFAULT_BACKEND_URL = 'https://dashboard-beryl-xi-25.vercel.app';
 
 let cachedUrl: string | null = null;
 
