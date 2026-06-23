@@ -38,7 +38,8 @@ export function costUsd(model: string, inputTokens: number, outputTokens: number
 }
 
 // ── Free allowance for users without an active paid subscription (beta) ──────
-export const FREE_TIER = { planId: 'free', monthlyTokenBudget: 500_000, dailyTokenBudget: 50_000 };
+// Beta/testing allowance (no paywall yet). Raised for owner testing — tighten before public launch.
+export const FREE_TIER = { planId: 'free', monthlyTokenBudget: 2_000_000, dailyTokenBudget: 200_000 };
 
 export interface Entitlement {
   planId: string;
