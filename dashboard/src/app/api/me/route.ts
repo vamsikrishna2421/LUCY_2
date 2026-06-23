@@ -4,7 +4,7 @@
  */
 import { NextResponse, type NextRequest } from 'next/server';
 import { getUserFromRequest } from '@/lib/authVerify';
-import { resolveEntitlement, tokenUsage, startOfTodayISO } from '@/lib/usage';
+import { resolveEntitlement, tokenUsage, windowStartISO } from '@/lib/usage';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,9 +14,9 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: error ?? 'Unauthorized' }, { status: 401 });
 
   const ent = await resolveEntitlement(user.id);
-  const [monthlyUsed, dailyUsed] = await Promise.all([
+  const [monthlyUsed, windowUsed] = await Promise.all([
     tokenUsage(user.id, ent.periodStart),
-    tokenUsage(user.id, startOfTodayISO()),
+    tokenUsage(user.id, windowStartISO(ent.windowHours)),
   ]);
 
   return NextResponse.json({
@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
     plan: { id: ent.planId, status: ent.status },
     usage: {
       monthly: { used: monthlyUsed, budget: ent.monthlyBudget, remaining: Math.max(0, ent.monthlyBudget - monthlyUsed) },
-      daily: { used: dailyUsed, budget: ent.dailyBudget, remaining: Math.max(0, ent.dailyBudget - dailyUsed) },
+      window: { used: windowUsed, budget: ent.windowBudget, hours: ent.windowHours, remaining: Math.max(0, ent.windowBudget - windowUsed) },
       periodStart: ent.periodStart,
     },
   });

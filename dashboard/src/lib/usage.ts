@@ -1,15 +1,15 @@
 /**
  * Entitlement + metering helpers (SERVER ONLY) shared by /api/ai and /api/me.
  *
- * Cost control lives here: task→managed-model mapping (task-tiered: cheap Haiku for routine work,
- * Sonnet for reasoning), per-model cost rates, and the per-user token budgets. Users without a paid
- * subscription get a modest FREE allowance (beta — no paywall yet); paid plans override it once
- * Stripe is wired.
+ * Cost control: task→managed-model mapping (Haiku for routine, Sonnet for reasoning), per-model cost
+ * rates, and the per-user budgets. Throttling uses a short ROLLING WINDOW (windowHours) so a user
+ * who hits the cap waits only a few hours (and sees an upgrade prompt) rather than a whole day — plus
+ * a hard monthly ceiling. Users without a paid subscription get a beta allowance (FREE_TIER).
  */
 import 'server-only';
 import { supabaseAdmin } from './supabaseAdmin';
 
-// ── Task → managed model (user-selected: task-tiered) ────────────────────────
+// ── Task → managed model (task-tiered) ───────────────────────────────────────
 const TASK_MODEL: Record<string, string> = {
   extraction: 'claude-haiku-4-5',
   summary: 'claude-haiku-4-5',
@@ -26,7 +26,7 @@ export function modelForTask(task: string | undefined): string {
   return (task ? TASK_MODEL[task] : undefined) ?? DEFAULT_MODEL;
 }
 
-// ── Cost per token ($ / token = per-1M ÷ 1e6). Haiku 4.5 $1/$5 · Sonnet 4.6 $3/$15 · Opus 4.8 $5/$25 ──
+// ── Cost per token ($ / token). Haiku 4.5 $1/$5 · Sonnet 4.6 $3/$15 · Opus 4.8 $5/$25 ──
 const RATES: Record<string, { in: number; out: number }> = {
   'claude-haiku-4-5': { in: 1 / 1e6, out: 5 / 1e6 },
   'claude-sonnet-4-6': { in: 3 / 1e6, out: 15 / 1e6 },
@@ -37,15 +37,16 @@ export function costUsd(model: string, inputTokens: number, outputTokens: number
   return inputTokens * r.in + outputTokens * r.out;
 }
 
-// ── Free allowance for users without an active paid subscription (beta) ──────
-// Beta/testing allowance (no paywall yet). Raised for owner testing — tighten before public launch.
-export const FREE_TIER = { planId: 'free', monthlyTokenBudget: 2_000_000, dailyTokenBudget: 200_000 };
+// ── Beta/testing allowance (no paywall yet). Raised for owner testing — tighten before public launch.
+//    windowTokenBudget applies over a rolling windowHours window (short-term throttle + upsell hook).
+export const FREE_TIER = { planId: 'free', monthlyTokenBudget: 2_000_000, windowTokenBudget: 200_000, windowHours: 5 };
 
 export interface Entitlement {
   planId: string;
   status: string;          // active | trialing | free
   monthlyBudget: number;
-  dailyBudget: number;
+  windowBudget: number;    // tokens allowed within the rolling window
+  windowHours: number;     // length of the throttle window
   periodStart: string;     // ISO — start of the current monthly window
 }
 
@@ -74,7 +75,9 @@ export async function resolveEntitlement(userId: string): Promise<Entitlement> {
       planId: sub.plan_id ?? 'unknown',
       status: sub.status,
       monthlyBudget: Number(plan.monthly_token_budget),
-      dailyBudget: Number(plan.daily_token_budget),
+      // Paid plans reuse their per-period budget as the rolling-window budget for now.
+      windowBudget: Number(plan.daily_token_budget),
+      windowHours: FREE_TIER.windowHours,
       periodStart: sub.current_period_start ?? thirtyDaysAgo,
     };
   }
@@ -82,7 +85,8 @@ export async function resolveEntitlement(userId: string): Promise<Entitlement> {
     planId: FREE_TIER.planId,
     status: 'free',
     monthlyBudget: FREE_TIER.monthlyTokenBudget,
-    dailyBudget: FREE_TIER.dailyTokenBudget,
+    windowBudget: FREE_TIER.windowTokenBudget,
+    windowHours: FREE_TIER.windowHours,
     periodStart: thirtyDaysAgo,
   };
 }
@@ -94,8 +98,7 @@ export async function tokenUsage(userId: string, sinceISO: string): Promise<numb
   return Number(data ?? 0);
 }
 
-export function startOfTodayISO(): string {
-  const d = new Date();
-  d.setUTCHours(0, 0, 0, 0);
-  return d.toISOString();
+/** Start of the rolling throttle window (now − hours). */
+export function windowStartISO(hours: number): string {
+  return new Date(Date.now() - hours * 3_600_000).toISOString();
 }

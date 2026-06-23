@@ -12,7 +12,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { getUserFromRequest } from '@/lib/authVerify';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
-import { resolveEntitlement, tokenUsage, startOfTodayISO, modelForTask, costUsd } from '@/lib/usage';
+import { resolveEntitlement, tokenUsage, windowStartISO, modelForTask, costUsd } from '@/lib/usage';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -42,19 +42,19 @@ export async function POST(req: NextRequest) {
 
   // ── Budget gate (pre-check) — never spend when over budget ──
   const ent = await resolveEntitlement(user.id);
-  const [monthlyUsed, dailyUsed] = await Promise.all([
+  const [monthlyUsed, windowUsed] = await Promise.all([
     tokenUsage(user.id, ent.periodStart),
-    tokenUsage(user.id, startOfTodayISO()),
+    tokenUsage(user.id, windowStartISO(ent.windowHours)),
   ]);
   if (monthlyUsed >= ent.monthlyBudget) {
-    return NextResponse.json({ error: 'monthly_limit', message: "You've reached this month's usage limit." }, { status: 429 });
+    return NextResponse.json({ error: 'monthly_limit', message: "You've reached this month's quota.", resetHours: null }, { status: 429 });
   }
-  if (dailyUsed >= ent.dailyBudget) {
-    return NextResponse.json({ error: 'daily_limit', message: "You've reached today's usage limit — it resets tomorrow." }, { status: 429 });
+  if (windowUsed >= ent.windowBudget) {
+    return NextResponse.json({ error: 'quota_reached', message: `Quota reached — resets within ${ent.windowHours}h.`, resetHours: ent.windowHours }, { status: 429 });
   }
   // Clamp output to the smaller of the requested cap and remaining budget, so a near-limit call
-  // can't overshoot the plan/free cap by a full max_tokens generation.
-  const remainingTokens = Math.max(0, Math.min(ent.monthlyBudget - monthlyUsed, ent.dailyBudget - dailyUsed));
+  // can't overshoot the cap by a full max_tokens generation.
+  const remainingTokens = Math.max(0, Math.min(ent.monthlyBudget - monthlyUsed, ent.windowBudget - windowUsed));
   const effMaxTokens = Math.max(64, Math.min(maxTokens, remainingTokens || maxTokens));
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
