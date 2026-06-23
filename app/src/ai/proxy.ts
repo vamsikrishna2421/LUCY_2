@@ -60,11 +60,21 @@ async function callProxy(body: ProxyBody): Promise<string> {
   const url = await getBackendUrl();
   const token = await getAccessToken();
   if (!url || !token) throw new Error('Managed AI not available.');
-  const res = await fetch(`${url}/api/ai`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify(body),
-  });
+  // Hard timeout so a hung request can never freeze the processing queue (the single-flight drainer
+  // awaits this). On abort the call throws → extraction falls back to on-device; capture retries.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 45000);
+  let res: Response;
+  try {
+    res = await fetch(`${url}/api/ai`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
   const raw = await res.text();
   type ProxyResp = { text?: string; message?: string; error?: string };
   let json: ProxyResp | null = null;

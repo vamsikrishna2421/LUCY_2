@@ -647,29 +647,21 @@ function AuthedApp() {
       const text = passiveListener.getAccumulatedTranscript().trim();
       passiveListener.clearTranscript();
       if (text) {
-        // Context-aware single mic: route the utterance through LUCY's command brain, biased by the
-        // screen you're on. It schedules / captures / adds / navigates — whatever you asked for.
-        try {
-          const ctx = currentVoiceContext();
-          const { runVoiceCommand } = await import('./src/voice/commandRouter');
-          const r = await runVoiceCommand(text, undefined, ctx);
-          if (r?.speak) Alert.alert('LUCY', r.speak);
-          if (r?.navigate) applyVoiceNav(r.navigate);
-          setRefreshToken((v) => v + 1);
-          void drainQueue();
-        } catch {
-          // Fall back to plain capture if the command brain is unavailable.
-          await enqueueTranscript(text, 'voice', false);
-          setRefreshToken((v) => v + 1);
-          void drainQueue();
-        }
+        // Voice typing = ONE dictation. Save the whole clip as a single VOICE memory and let the LLM
+        // decide how to structure it (tasks/expenses/etc.) during extraction. We deliberately do NOT
+        // route hold-to-talk through the command brain or the thought/journal splitters — that
+        // mis-tagged dictations as "text" and exploded one clip into many sentence-captures. Spoken
+        // commands live in "Hey Lucy" (the conversation), not here.
+        await enqueueTranscript(text, 'voice', false);
+        setRefreshToken((v) => v + 1);
+        void drainQueue();
       } else {
         Alert.alert('Nothing captured', 'I didn\'t catch any speech — hold the mic and speak for a couple of seconds, then release.');
       }
     } catch { /* non-critical */ } finally {
       setVoiceStatus('idle');
     }
-  }, [drainQueue, currentVoiceContext, applyVoiceNav]);
+  }, [drainQueue]);
 
   const onVoicePressIn = useCallback(() => {
     if (voiceRecording.current) {

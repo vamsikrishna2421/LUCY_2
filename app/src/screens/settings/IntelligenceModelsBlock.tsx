@@ -22,6 +22,13 @@ export function IntelligenceModelsBlock({
 }): React.ReactElement {
   const { spacing } = useTheme();
   const locked = s.tokenMode === 'managed';
+  // Whether AI is currently served by the managed backend (signed in + backend configured).
+  const [managed, setManaged] = React.useState(false);
+  React.useEffect(() => {
+    let alive = true;
+    void import('../../ai/proxy').then((m) => m.proxyAvailable()).then((v) => { if (alive) setManaged(v); }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
   const activePreset = MODEL_PRESETS.find((p) =>
     (Object.keys(p.models) as ModelRole[]).every((r) => s.roleModels[r] === p.models[r]),
   )?.id ?? null;
@@ -76,6 +83,15 @@ export function IntelligenceModelsBlock({
           </View>
         ))}
       </Stack>
+
+      {/* Managed-by-LUCY indicator — clarifies that the BYOK field below is optional in managed mode */}
+      {managed ? (
+        <>
+          <Spacer size="md" />
+          <Text variant="footnote" weight="700" color="accent">✓ Managed by LUCY</Text>
+          <Text variant="caption" color="textMuted">Your AI runs on LUCY’s included key — no personal key needed. The key below is optional.</Text>
+        </>
+      ) : null}
 
       {/* BYOK Anthropic key */}
       <Spacer size="md" />

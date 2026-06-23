@@ -341,8 +341,11 @@ async function route(req: ParsedRequest): Promise<string> {
     if (req.method === 'POST' && req.path === '/api/capture') {
       const text = String(payload.text ?? '').trim();
       if (!text) return json(400, { error: 'Empty text' });
+      // Optional source — 'voice' captures are kept as a single memory (never split/segmented),
+      // which lets us re-assemble a wrongly-split voice dictation into one clean note.
+      const source = ['text', 'voice'].includes(String(payload.source)) ? (String(payload.source) as 'text' | 'voice') : 'text';
       const { enqueueTranscript, processQueue } = await import('../processing/extract');
-      await enqueueTranscript(text, 'text');
+      await enqueueTranscript(text, source);
       void processQueue();
       return json(200, { ok: true });
     }

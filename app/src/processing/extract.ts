@@ -684,7 +684,7 @@ async function drainQueueOnce(onChange?: () => void, maxCaptures = Number.POSITI
       const { isMultiDateJournal, ingestJournal } = await import('./journalSplitter');
 
       // Multi-date journal → split into per-date captures with historical timestamps.
-      if (rawText.length > 3000 && isMultiDateJournal(rawText)) {
+      if (capture.source !== 'voice' && rawText.length > 3000 && isMultiDateJournal(rawText)) {
         const count = await ingestJournal(db, rawText, privacyLevel, capture.id);
         if (count >= 2) {
           const { archiveCapture } = await import('../db/captures');
@@ -696,7 +696,9 @@ async function drainQueueOnce(onChange?: () => void, maxCaptures = Number.POSITI
       }
 
       // Single-day journal / multi-event log → one timeline memory per event.
-      if (shouldSegmentDayJournal(rawText) && !isMultiDateJournal(rawText)) {
+      // A voice dictation is ONE memory — never segment it into per-sentence captures (the LLM still
+      // splits tasks/items inside the single extraction). Only typed day-logs get segmented.
+      if (capture.source !== 'voice' && shouldSegmentDayJournal(rawText) && !isMultiDateJournal(rawText)) {
         const segCount = await segmentAndIngestDayJournal(db, rawText, privacyLevel, capture.id);
         if (segCount >= 2) {
           const { archiveCapture } = await import('../db/captures');
