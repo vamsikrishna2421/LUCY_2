@@ -36,6 +36,12 @@ export async function promptClaudeVision(
   mediaType = 'image/jpeg',
   model = config.claudeSummaryModel,
 ): Promise<string> {
+  // Managed proxy first — vision OCR runs on the managed key via /api/ai when signed in + configured.
+  const { proxyAvailable, proxyVision, ProxyLimitError } = await import('./proxy');
+  if (await proxyAvailable()) {
+    try { return await proxyVision(system, base64Image, mediaType); }
+    catch (e) { if (e instanceof ProxyLimitError) throw e; /* else fall through to BYO/on-device */ }
+  }
   const apiKey = await getApiKey();
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',

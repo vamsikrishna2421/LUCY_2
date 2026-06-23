@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   const { user, error } = await getUserFromRequest(req);
   if (!user) return NextResponse.json({ error: error ?? 'Unauthorized' }, { status: 401 });
 
-  let body: { input?: unknown; system?: unknown; task?: unknown; maxTokens?: unknown };
+  let body: { input?: unknown; system?: unknown; task?: unknown; maxTokens?: unknown; image?: unknown };
   try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 }); }
 
   const input = typeof body.input === 'string' ? body.input : '';
@@ -34,6 +34,11 @@ export async function POST(req: NextRequest) {
   const task = typeof body.task === 'string' ? body.task : 'chat';
   const system = typeof body.system === 'string' ? body.system : undefined;
   const maxTokens = Math.min(MAX_OUTPUT_TOKENS, Math.max(256, Number(body.maxTokens) || 1800));
+  const imageObj = body.image && typeof body.image === 'object' ? (body.image as { data?: unknown; mediaType?: unknown }) : null;
+  const imageData = imageObj && typeof imageObj.data === 'string' ? imageObj.data : null;
+  const rawMedia = imageObj && typeof imageObj.mediaType === 'string' ? imageObj.mediaType : 'image/jpeg';
+  const imageMedia = (['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(rawMedia) ? rawMedia : 'image/jpeg') as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+  if (imageData && imageData.length > 7_000_000) return NextResponse.json({ error: 'Image too large.' }, { status: 413 });
 
   // ── Budget gate (pre-check) — never spend when over budget ──
   const ent = await resolveEntitlement(user.id);
@@ -47,6 +52,10 @@ export async function POST(req: NextRequest) {
   if (dailyUsed >= ent.dailyBudget) {
     return NextResponse.json({ error: 'daily_limit', message: "You've reached today's usage limit — it resets tomorrow." }, { status: 429 });
   }
+  // Clamp output to the smaller of the requested cap and remaining budget, so a near-limit call
+  // can't overshoot the plan/free cap by a full max_tokens generation.
+  const remainingTokens = Math.max(0, Math.min(ent.monthlyBudget - monthlyUsed, ent.dailyBudget - dailyUsed));
+  const effMaxTokens = Math.max(64, Math.min(maxTokens, remainingTokens || maxTokens));
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return NextResponse.json({ error: 'server_misconfigured', message: 'AI is not configured yet.' }, { status: 503 });
@@ -62,9 +71,17 @@ export async function POST(req: NextRequest) {
   try {
     const resp = await client.messages.create({
       model,
-      max_tokens: maxTokens,
+      max_tokens: effMaxTokens,
       ...(system ? { system } : {}),
-      messages: [{ role: 'user', content: input }],
+      messages: [{
+        role: 'user',
+        content: imageData
+          ? [
+              { type: 'image', source: { type: 'base64', media_type: imageMedia, data: imageData } },
+              { type: 'text', text: input },
+            ]
+          : input,
+      }],
     });
     text = resp.content
       .filter((b): b is Anthropic.TextBlock => b.type === 'text')

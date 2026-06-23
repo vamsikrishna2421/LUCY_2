@@ -87,6 +87,15 @@ function parseReceiptJson(content: string): ExtractedReceipt | null {
 
 export async function processReceiptImage(imageUri: string): Promise<ExtractedReceipt> {
   try {
+    // Managed mode: route receipt OCR through the managed vision proxy.
+    const { proxyAvailable } = await import('../ai/proxy');
+    if (await proxyAvailable()) {
+      const base64 = await imageToBase64(imageUri);
+      const { promptClaudeVision } = await import('../ai/claude');
+      const out = await promptClaudeVision(RECEIPT_PROMPT, base64, /\.png$/i.test(imageUri) ? 'image/png' : 'image/jpeg');
+      const r = parseReceiptJson(out);
+      if (r) return r;
+    }
     const { getModelKeyStatus } = await import('../ai/provider');
     const status = await getModelKeyStatus();
     if (status.remote && status.keyPresent) {

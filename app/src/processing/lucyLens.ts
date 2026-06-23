@@ -67,12 +67,14 @@ export async function processImageToMemory(
     const { available, openAIKey } = await resolveRemoteAvailability();
     const preferred = (await import('../ai/modelPreference')).getPreferredModel(require('../config').config.openAIModel);
     const useClaude = preferred.startsWith('claude-');
+    // Managed mode routes all vision through the managed proxy (promptClaudeVision is proxy-aware).
+    const useManaged = await (await import('../ai/proxy')).proxyAvailable();
     // JPEG by default; PNG screenshots must be tagged correctly or the model rejects the bytes.
     const mediaType = /\.png$/i.test(uri) || /\.png$/i.test(originalName ?? '') ? 'image/png' : 'image/jpeg';
 
     if (available && !await isAiCallCapReached(db)) {
       let content = '';
-      if (useClaude) {
+      if (useManaged || useClaude) {
         // Claude (Sonnet) reads handwriting/whiteboards far better than gpt-4o-mini.
         const { promptClaudeVision } = await import('../ai/claude');
         content = await promptClaudeVision(`${LENS_SYSTEM}\n\nFilename hint: ${originalName ?? 'unknown'}`, base64, mediaType);

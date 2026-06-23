@@ -29,6 +29,12 @@ export async function resolveRemoteAvailability(): Promise<{ available: boolean;
   if (config.aiMode === 'offline') {
     return { available: false, openAIKey: '' };
   }
+  // Managed proxy: a signed-in session + a configured backend make remote AI available WITHOUT a
+  // user key (all calls run on the managed key via /api/ai). Dormant until a backend URL is set.
+  const { proxyAvailable } = await import('./proxy');
+  if (await proxyAvailable()) {
+    return { available: true, openAIKey: '' };
+  }
   const model = getPreferredModel(config.openAIModel);
   if (model.startsWith('claude-')) {
     const claudeKey = (await getClaudeApiKey()) ?? process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY?.trim() ?? null;
@@ -46,6 +52,11 @@ export async function resolveRemoteAvailability(): Promise<{ available: boolean;
 export interface ModelKeyStatus { model: string; remote: boolean; keyPresent: boolean; provider: string }
 
 export async function getModelKeyStatus(): Promise<ModelKeyStatus> {
+  // Managed mode: the backend serves AI on the managed key, so no user key is needed.
+  const { proxyAvailable } = await import('./proxy');
+  if (await proxyAvailable()) {
+    return { model: 'managed', remote: true, keyPresent: true, provider: 'LUCY (managed)' };
+  }
   const model = getPreferredModel(config.openAIModel);
   if (model.startsWith('claude-')) {
     const claudeKey = (await getClaudeApiKey()) ?? process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY?.trim() ?? null;
@@ -118,7 +129,9 @@ export const AIProvider = {
         duration_ms: Date.now() - t0,
         error: e instanceof Error ? e.message : String(e),
       })).catch(() => {});
-      throw e;
+      // Resilience: the remote/proxy extraction failed (network, backend down, over-limit) — organize
+      // the capture on-device so it's never lost, using the device-tuned prompt + lenient JSON parse.
+      return localAnalyze(transcript);
     }
     return result;
   },

@@ -19,6 +19,7 @@ const TASK_MODEL: Record<string, string> = {
   ask: 'claude-sonnet-4-6',
   insight: 'claude-sonnet-4-6',
   chat: 'claude-sonnet-4-6',
+  vision: 'claude-sonnet-4-6',
 };
 export const DEFAULT_MODEL = 'claude-sonnet-4-6';
 export function modelForTask(task: string | undefined): string {

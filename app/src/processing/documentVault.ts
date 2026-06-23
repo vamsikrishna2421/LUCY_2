@@ -112,32 +112,41 @@ async function classify(base64: string, hint: string, buckets: string[]): Promis
     const db = await getDatabase();
     const { available, openAIKey } = await resolveRemoteAvailability();
     if (!available || await isAiCallCapReached(db)) return null;
-    const isOpenAI = !(await import('../ai/modelPreference').then((m) =>
-      m.getPreferredModel(require('../config').config.openAIModel))).startsWith('claude-');
-    const apiKey = isOpenAI ? openAIKey : await import('../ai/remoteAccess').then((m) => m.getRemoteOpenAIKey());
-    if (!apiKey) return null;
     const existing = buckets.length
       ? `\n\nExisting categories already in this vault — REUSE the exact name if this document belongs to one of them; only invent a new category if none fits: ${buckets.join(', ')}.`
       : '';
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        max_tokens: 500,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'text', text: `${VAULT_SYSTEM}${existing}\n\nFilename hint: ${hint}` },
-            { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}`, detail: 'low' } },
-          ],
-        }],
-      }),
-    });
-    void recordAiCall(db);
-    if (!response.ok) return null;
-    const json = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
-    const content = json.choices?.[0]?.message?.content ?? '';
+    const prompt = `${VAULT_SYSTEM}${existing}\n\nFilename hint: ${hint}`;
+    let content = '';
+    const { proxyAvailable } = await import('../ai/proxy');
+    if (await proxyAvailable()) {
+      // Managed mode: classify via the managed vision proxy (promptClaudeVision is proxy-aware).
+      const { promptClaudeVision } = await import('../ai/claude');
+      content = await promptClaudeVision(prompt, base64, 'image/jpeg');
+    } else {
+      const isOpenAI = !(await import('../ai/modelPreference').then((m) =>
+        m.getPreferredModel(require('../config').config.openAIModel))).startsWith('claude-');
+      const apiKey = isOpenAI ? openAIKey : await import('../ai/remoteAccess').then((m) => m.getRemoteOpenAIKey());
+      if (!apiKey) return null;
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          max_tokens: 500,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}`, detail: 'low' } },
+            ],
+          }],
+        }),
+      });
+      void recordAiCall(db);
+      if (!response.ok) return null;
+      const json = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+      content = json.choices?.[0]?.message?.content ?? '';
+    }
     const start = content.indexOf('{'); const end = content.lastIndexOf('}');
     if (start === -1 || end === -1) return null;
     const parsed = JSON.parse(content.slice(start, end + 1)) as { title?: string; bucket?: string; description?: string; keywords?: string[] };

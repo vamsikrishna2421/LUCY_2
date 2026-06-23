@@ -6,7 +6,21 @@ import type { ExtractionResult } from '../types/extraction';
  *  `task` selects the cost tier (cheap for routine work, mid for insight, user's pick for chat). */
 export async function promptAI(system: string, input: string, apiKey: string, task: AiTask = 'chat'): Promise<string> {
   const model = modelForTask(task, config.openAIModel);
-  // Count this remote call toward the hourly cost guard.
+  // Managed proxy first (signed in + backend URL configured) — runs on the MANAGED key via the
+  // backend, not the user's own key. Dormant until a backend URL is set (see proxy.ts).
+  const { proxyAvailable, proxyPrompt, ProxyLimitError } = await import('./proxy');
+  if (await proxyAvailable()) {
+    try {
+      return await proxyPrompt(system, input, task);
+    } catch (e) {
+      if (e instanceof ProxyLimitError) throw e; // surface "limit reached" — never silently swallow
+      // Network/server/auth hiccup → fall back to on-device so the app still works offline.
+      const { promptDevice } = await import('./device');
+      return promptDevice(`${system}\n${input} /no_think`);
+    }
+  }
+  // Legacy BYO / on-device path — count toward the local hourly cost guard (managed mode meters
+  // server-side, so we skip the local guard for proxied calls above).
   void import('./rateLimit').then((m) => m.recordAiCall()).catch(() => {});
   if (model.startsWith('claude-')) {
     const { promptClaude } = await import('./claude');
@@ -89,5 +103,8 @@ export async function analyzeWithOpenAI(
   if (start === -1 || end === -1) {
     throw new Error('The AI model did not return structured JSON.');
   }
-  return JSON.parse(raw.slice(start, end + 1)) as ExtractionResult;
+  // Parse leniently — an on-device fallback (when the proxy/remote fails) can emit slightly malformed
+  // JSON, exactly like the dedicated device path which also uses jsonrepair.
+  const { jsonrepair } = await import('jsonrepair');
+  return JSON.parse(jsonrepair(raw.slice(start, end + 1))) as ExtractionResult;
 }

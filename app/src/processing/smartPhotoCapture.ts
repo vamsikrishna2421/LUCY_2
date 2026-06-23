@@ -33,9 +33,15 @@ function parse(raw: string): { type: string; meal?: { items?: Array<Record<strin
 async function visionClassify(uri: string): Promise<string> {
   const { readAsStringAsync, EncodingType } = await import('expo-file-system/legacy');
   const base64 = await readAsStringAsync(uri, { encoding: EncodingType.Base64 });
+  const mediaType = /\.png$/i.test(uri) ? 'image/png' : 'image/jpeg';
+  // Managed mode: route vision through the managed proxy (promptClaudeVision is proxy-aware).
+  const { proxyAvailable } = await import('../ai/proxy');
+  if (await proxyAvailable()) {
+    const { promptClaudeVision } = await import('../ai/claude');
+    return promptClaudeVision(CLASSIFY_PROMPT, base64, mediaType);
+  }
   const { getModelKeyStatus } = await import('../ai/provider');
   const status = await getModelKeyStatus();
-  const mediaType = /\.png$/i.test(uri) ? 'image/png' : 'image/jpeg';
   if (status.model.startsWith('claude-')) {
     const { promptClaudeVision } = await import('../ai/claude');
     return promptClaudeVision(CLASSIFY_PROMPT, base64, mediaType, status.model);

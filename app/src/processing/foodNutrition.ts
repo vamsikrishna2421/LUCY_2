@@ -64,8 +64,10 @@ export async function estimateNutritionFromPhoto(uri: string): Promise<Estimated
     if (!available) return [];
     const preferred = (await import('../ai/modelPreference')).getPreferredModel(require('../config').config.openAIModel);
     const mediaType = /\.png$/i.test(uri) ? 'image/png' : 'image/jpeg';
+    // Managed mode routes vision through the managed proxy.
+    const useManaged = await (await import('../ai/proxy')).proxyAvailable();
     let content = '';
-    if (preferred.startsWith('claude-')) {
+    if (useManaged || preferred.startsWith('claude-')) {
       const { promptClaudeVision } = await import('../ai/claude');
       content = await promptClaudeVision(`${NUTRITION_SYS}\n\nIdentify every food in the photo and estimate portions.`, base64, mediaType);
     } else if (openAIKey) {
