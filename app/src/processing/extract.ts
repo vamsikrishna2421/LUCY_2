@@ -721,6 +721,19 @@ async function drainQueueOnce(onChange?: () => void, maxCaptures = Number.POSITI
       void storeEmbedding(db, capture.id, capture.raw_transcript);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Processing failed.';
+      // Managed-budget quota reached → PAUSE this capture (keep its raw text; don't dump it as a plain
+      // note). The timeline shows "quota reached — upgrade to skip the wait"; it auto-retries when the
+      // rolling window frees up.
+      if ((error instanceof Error && error.name === 'ProxyLimitError') || /quota reached|usage limit|this month's quota/i.test(message)) {
+        await db.runAsync(
+          "UPDATE captures SET processed = -1, processing_error = ?, next_attempt_at = datetime('now', '+30 minutes') WHERE id = ?",
+          message, capture.id,
+        );
+        void logError(`processQueue#${capture.id}`, error, db);
+        processedCount += 1;
+        onChange?.();
+        continue;
+      }
       console.warn(`Capture processing deferred: ${message}`);
       const lower = message.toLowerCase();
       // Only genuinely transient errors are worth a quiet auto-retry (network blips, server hiccups).

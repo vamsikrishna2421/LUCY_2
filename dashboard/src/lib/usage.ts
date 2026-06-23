@@ -1,12 +1,18 @@
 /**
  * Entitlement + metering helpers (SERVER ONLY) shared by /api/ai and /api/me.
  *
- * Cost control: task→managed-model mapping (Haiku for routine, Sonnet for reasoning), per-model cost
- * rates, and the per-user budgets. Throttling uses a short ROLLING WINDOW (windowHours) so a user
- * who hits the cap waits only a few hours (and sees an upgrade prompt) rather than a whole day — plus
- * a hard monthly ceiling. Users without a paid subscription get a beta allowance (FREE_TIER).
+ * Budgets are MANAGED IN SUPABASE — change limits with SQL, no code deploy:
+ *   • public.plans: per-plan `monthly_token_budget`, `window_token_budget`, `window_hours`
+ *     (the `free` row = no-subscription allowance; paid rows = subscriber limits).
+ *   • public.profiles: `override_window_token_budget` / `override_monthly_token_budget` /
+ *     `override_window_hours` = per-user override (owner testing / comps). NULL = no override.
+ *
+ * Priority: per-user override → active subscription's plan → (expired subscription → free, flagged
+ * 'expired' for a renew prompt) → free. Throttling uses a rolling window (window_hours) plus a hard
+ * monthly ceiling. The code FALLBACK is used only if the DB is unreachable, so the proxy never hard-fails.
  */
 import 'server-only';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from './supabaseAdmin';
 
 // ── Task → managed model (task-tiered) ───────────────────────────────────────
@@ -37,58 +43,102 @@ export function costUsd(model: string, inputTokens: number, outputTokens: number
   return inputTokens * r.in + outputTokens * r.out;
 }
 
-// ── Beta/testing allowance (no paywall yet). Raised for owner testing — tighten before public launch.
-//    windowTokenBudget applies over a rolling windowHours window (short-term throttle + upsell hook).
-export const FREE_TIER = { planId: 'free', monthlyTokenBudget: 2_000_000, windowTokenBudget: 200_000, windowHours: 5 };
+// Safety net ONLY (DB unreachable / 'free' row missing). Real values live in Supabase.
+const FALLBACK = { monthlyBudget: 500_000, windowBudget: 10_000, windowHours: 5 };
 
 export interface Entitlement {
   planId: string;
-  status: string;          // active | trialing | free
+  status: string;          // override | active | trialing | expired | free
   monthlyBudget: number;
   windowBudget: number;    // tokens allowed within the rolling window
   windowHours: number;     // length of the throttle window
   periodStart: string;     // ISO — start of the current monthly window
 }
 
+interface PlanBudget { monthly_token_budget: number; window_token_budget: number | null; window_hours: number | null }
 interface SubRow {
   plan_id: string | null;
   status: string;
   current_period_start: string | null;
-  plans: { monthly_token_budget: number; daily_token_budget: number } | { monthly_token_budget: number; daily_token_budget: number }[] | null;
+  current_period_end: string | null;
+  plans: PlanBudget | PlanBudget[] | null;
+}
+interface ProfileOverride {
+  override_window_token_budget: number | null;
+  override_monthly_token_budget: number | null;
+  override_window_hours: number | null;
+}
+
+async function freeEntitlement(db: SupabaseClient, periodStart: string, status: 'free' | 'expired' = 'free'): Promise<Entitlement> {
+  const { data } = await db.from('plans').select('monthly_token_budget, window_token_budget, window_hours').eq('id', 'free').maybeSingle();
+  const f = data as PlanBudget | null;
+  return {
+    planId: 'free',
+    status,
+    monthlyBudget: Number(f?.monthly_token_budget ?? FALLBACK.monthlyBudget),
+    windowBudget: Number(f?.window_token_budget ?? FALLBACK.windowBudget),
+    windowHours: Number(f?.window_hours ?? FALLBACK.windowHours),
+    periodStart,
+  };
 }
 
 export async function resolveEntitlement(userId: string): Promise<Entitlement> {
+  const db = supabaseAdmin();
   const thirtyDaysAgo = new Date(Date.now() - 30 * 86_400_000).toISOString();
-  const { data } = await supabaseAdmin()
+
+  // 1) Per-user override (Supabase profiles) — highest priority.
+  const { data: profData } = await db
+    .from('profiles')
+    .select('override_window_token_budget, override_monthly_token_budget, override_window_hours')
+    .eq('id', userId)
+    .maybeSingle();
+  const prof = profData as ProfileOverride | null;
+  if (prof && prof.override_window_token_budget != null) {
+    return {
+      planId: 'override',
+      status: 'override',
+      monthlyBudget: Number(prof.override_monthly_token_budget ?? prof.override_window_token_budget),
+      windowBudget: Number(prof.override_window_token_budget),
+      windowHours: Number(prof.override_window_hours) || FALLBACK.windowHours,
+      periodStart: thirtyDaysAgo,
+    };
+  }
+
+  // 2) Latest subscription. Active = active/trialing AND not past current_period_end.
+  const { data: subData } = await db
     .from('subscriptions')
-    .select('plan_id, status, current_period_start, plans(monthly_token_budget, daily_token_budget)')
+    .select('plan_id, status, current_period_start, current_period_end, plans(monthly_token_budget, window_token_budget, window_hours)')
     .eq('user_id', userId)
-    .in('status', ['active', 'trialing'])
     .order('current_period_end', { ascending: false })
     .limit(1)
     .maybeSingle();
-
-  const sub = data as SubRow | null;
-  const plan = sub?.plans ? (Array.isArray(sub.plans) ? sub.plans[0] : sub.plans) : null;
-  if (sub && plan) {
-    return {
-      planId: sub.plan_id ?? 'unknown',
-      status: sub.status,
-      monthlyBudget: Number(plan.monthly_token_budget),
-      // Paid plans reuse their per-period budget as the rolling-window budget for now.
-      windowBudget: Number(plan.daily_token_budget),
-      windowHours: FREE_TIER.windowHours,
-      periodStart: sub.current_period_start ?? thirtyDaysAgo,
-    };
+  const sub = subData as SubRow | null;
+  if (sub) {
+    const plan = sub.plans ? (Array.isArray(sub.plans) ? sub.plans[0] : sub.plans) : null;
+    const notExpired = !sub.current_period_end || new Date(sub.current_period_end).getTime() > Date.now();
+    const active = ['active', 'trialing'].includes(sub.status) && notExpired;
+    if (active && plan && plan.window_token_budget != null) {
+      return {
+        planId: sub.plan_id ?? 'unknown',
+        status: sub.status,
+        monthlyBudget: Number(plan.monthly_token_budget),
+        windowBudget: Number(plan.window_token_budget),
+        windowHours: Number(plan.window_hours) || FALLBACK.windowHours,
+        periodStart: sub.current_period_start ?? thirtyDaysAgo,
+      };
+    }
+    // Subscription exists but is expired/lapsed → reset the user to free. The first time we detect it,
+    // downgrade the record (status → 'expired') so it's not re-evaluated as active. They drop to the
+    // free 10k/5h budget, flagged 'expired' so the app offers "renew" instead of "upgrade".
+    if (['active', 'trialing'].includes(sub.status)) {
+      void db.from('subscriptions').update({ status: 'expired', updated_at: new Date().toISOString() })
+        .eq('user_id', userId).eq('status', sub.status);
+    }
+    return freeEntitlement(db, thirtyDaysAgo, 'expired');
   }
-  return {
-    planId: FREE_TIER.planId,
-    status: 'free',
-    monthlyBudget: FREE_TIER.monthlyTokenBudget,
-    windowBudget: FREE_TIER.windowTokenBudget,
-    windowHours: FREE_TIER.windowHours,
-    periodStart: thirtyDaysAgo,
-  };
+
+  // 3) Never subscribed → free.
+  return freeEntitlement(db, thirtyDaysAgo);
 }
 
 /** Sum of input+output tokens for a user since the given ISO timestamp (via the DB helper). */

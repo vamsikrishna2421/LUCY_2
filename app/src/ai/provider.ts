@@ -129,8 +129,10 @@ export const AIProvider = {
         duration_ms: Date.now() - t0,
         error: e instanceof Error ? e.message : String(e),
       })).catch(() => {});
-      // Resilience: the remote/proxy extraction failed (network, backend down, over-limit) — organize
-      // the capture on-device so it's never lost, using the device-tuned prompt + lenient JSON parse.
+      // Quota reached → re-throw so the queue PAUSES this capture and the user sees the upgrade prompt.
+      // (Don't silently process on-device — that hides the limit and kills the upsell.)
+      if (e instanceof Error && e.name === 'ProxyLimitError') throw e;
+      // Other failures (network, backend down) → organize on-device so the capture is never lost.
       return localAnalyze(transcript);
     }
     return result;

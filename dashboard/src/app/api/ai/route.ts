@@ -46,11 +46,18 @@ export async function POST(req: NextRequest) {
     tokenUsage(user.id, ent.periodStart),
     tokenUsage(user.id, windowStartISO(ent.windowHours)),
   ]);
+  const renew = ent.status === 'expired';
   if (monthlyUsed >= ent.monthlyBudget) {
-    return NextResponse.json({ error: 'monthly_limit', message: "You've reached this month's quota.", resetHours: null }, { status: 429 });
+    const message = renew
+      ? 'Your subscription has ended — renew to keep using LUCY this month.'
+      : "You've reached this month's quota. Upgrade for a higher limit.";
+    return NextResponse.json({ error: 'monthly_limit', message, status: ent.status }, { status: 429 });
   }
   if (windowUsed >= ent.windowBudget) {
-    return NextResponse.json({ error: 'quota_reached', message: `Quota reached — resets within ${ent.windowHours}h.`, resetHours: ent.windowHours }, { status: 429 });
+    const message = renew
+      ? 'Your subscription has ended — renew to restore your higher limit.'
+      : `Quota reached — resets within ${ent.windowHours}h. Upgrade to skip the wait.`;
+    return NextResponse.json({ error: 'quota_reached', message, status: ent.status, resetHours: ent.windowHours }, { status: 429 });
   }
   // Clamp output to the smaller of the requested cap and remaining budget, so a near-limit call
   // can't overshoot the cap by a full max_tokens generation.

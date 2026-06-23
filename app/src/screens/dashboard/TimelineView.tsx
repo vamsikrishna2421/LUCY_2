@@ -406,7 +406,15 @@ function TimelineCard({
           ) : item.source === 'meeting' ? (
             <Text variant="bodyMed" numberOfLines={isExpanded ? undefined : 1}>{(item.raw_transcript ?? '').split('\n')[0] || 'Meeting'}</Text>
           ) : (
-            <Text variant="footnote" color="textMuted">{item.processed === -1 ? 'Saved · still organizing…' : 'Organizing your thought…'}</Text>
+            (() => {
+              const quota = item.processed === -1 && /quota reached|usage limit|quota/i.test(item.processing_error ?? '');
+              const msg = item.processed === -1
+                ? (quota
+                    ? `⚡ ${item.processing_error || 'Quota reached — upgrade to keep organizing.'}`
+                    : 'Saved · still organizing…')
+                : 'Organizing your thought…';
+              return <Text variant="footnote" color={quota ? 'warning' : 'textMuted'}>{msg}</Text>;
+            })()
           )}
 
           {/* Summary */}
