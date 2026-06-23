@@ -725,10 +725,14 @@ async function drainQueueOnce(onChange?: () => void, maxCaptures = Number.POSITI
       // note). The timeline shows "quota reached — upgrade to skip the wait"; it auto-retries when the
       // rolling window frees up.
       if ((error instanceof Error && error.name === 'ProxyLimitError') || /quota reached|usage limit|this month's quota/i.test(message)) {
-        await db.runAsync(
-          "UPDATE captures SET processed = -1, processing_error = ?, next_attempt_at = datetime('now', '+30 minutes') WHERE id = ?",
-          message, capture.id,
-        );
+        // Quota reached → GRACEFULLY DEGRADE to the on-device model (the app shows an upgrade-nudge
+        // banner) so the capture is still organized; plain note only if on-device also fails.
+        try {
+          const localResult = await AIProvider.analyzeLocally(capture.raw_transcript ?? '');
+          await persistExtraction(capture, localResult);
+        } catch {
+          await saveCaptureAsPlainNote(db, capture.id, capture.raw_transcript ?? '');
+        }
         void logError(`processQueue#${capture.id}`, error, db);
         processedCount += 1;
         onChange?.();
@@ -743,18 +747,21 @@ async function drainQueueOnce(onChange?: () => void, maxCaptures = Number.POSITI
         // Retry quietly in the background; the timeline shows a calm "still saving…", never "FAILED".
         await markCaptureFailed(db, capture.id, message);
       } else {
-        // Structural failures (no JSON), billing/quota, or exhausted retries: never strand the user
-        // on a scary "tap to retry" badge. Keep their words as a plain note instead.
-        await saveCaptureAsPlainNote(db, capture.id, capture.raw_transcript ?? '');
-        // Even a degraded note still carries a feeling — log on-device sentiment so the mood graph
-        // stays densely sampled (this is the path that previously contributed nothing).
+        // Structural / chunks-failed / exhausted → GRACEFULLY DEGRADE to the on-device model so the
+        // capture is still organized; only fall back to a plain note if on-device extraction also fails.
         try {
-          const { analyzeSentiment } = await import('./sentiment');
-          const s = analyzeSentiment(capture.raw_transcript ?? '');
-          if (s.confidence > 0) {
-            await db.runAsync('INSERT INTO mood_entries (capture_id, tone, energy) VALUES (?, ?, ?)', capture.id, s.tone, s.energy);
-          }
-        } catch { /* non-critical */ }
+          const localResult = await AIProvider.analyzeLocally(capture.raw_transcript ?? '');
+          await persistExtraction(capture, localResult);
+        } catch {
+          await saveCaptureAsPlainNote(db, capture.id, capture.raw_transcript ?? '');
+          try {
+            const { analyzeSentiment } = await import('./sentiment');
+            const s = analyzeSentiment(capture.raw_transcript ?? '');
+            if (s.confidence > 0) {
+              await db.runAsync('INSERT INTO mood_entries (capture_id, tone, energy) VALUES (?, ?, ?)', capture.id, s.tone, s.energy);
+            }
+          } catch { /* non-critical */ }
+        }
       }
       void logError(`processQueue#${capture.id}`, error, db);
     }

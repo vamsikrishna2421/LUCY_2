@@ -36,16 +36,37 @@ async function getAccessToken(): Promise<string | null> {
   catch { return null; }
 }
 
-/** Use the managed proxy when there is BOTH a configured backend URL AND a signed-in session. */
+/** User's processing preference: 'hybrid' (managed cloud + on-device fallback) or 'on_device' (fully
+ *  local, never calls the managed backend). Stored in settings; defaults to hybrid. */
+export type ProcessingMode = 'hybrid' | 'on_device';
+export async function getProcessingMode(): Promise<ProcessingMode> {
+  try {
+    const db = await getDatabase();
+    return (await getSetting(db, 'ai_processing_mode')) === 'on_device' ? 'on_device' : 'hybrid';
+  } catch { return 'hybrid'; }
+}
+
+/** Use the managed proxy when: a backend URL is configured, the user hasn't chosen fully-on-device,
+ *  AND there's a signed-in session. */
 export async function proxyAvailable(): Promise<boolean> {
   const url = await getBackendUrl();
   if (!url) return false;
+  if ((await getProcessingMode()) === 'on_device') return false; // user opted into fully-local processing
   return Boolean(await getAccessToken());
 }
 
 /** Over-budget (429) — must be surfaced to the user, never silently swallowed. */
 export class ProxyLimitError extends Error {
   constructor(message: string) { super(message); this.name = 'ProxyLimitError'; }
+}
+
+// Quota-reached notifier — the app subscribes to show an upgrade-nudge banner when the managed budget
+// is hit (we still gracefully fall back to on-device so the capture is organized).
+export interface QuotaInfo { message: string; resetHours?: number | null }
+const quotaListeners = new Set<(info: QuotaInfo) => void>();
+export function onQuotaReached(fn: (info: QuotaInfo) => void): () => void {
+  quotaListeners.add(fn);
+  return () => { quotaListeners.delete(fn); };
 }
 
 interface ProxyBody {
@@ -79,7 +100,12 @@ async function callProxy(body: ProxyBody): Promise<string> {
   type ProxyResp = { text?: string; message?: string; error?: string };
   let json: ProxyResp | null = null;
   try { json = JSON.parse(raw) as ProxyResp; } catch { /* non-JSON error page */ }
-  if (res.status === 429) throw new ProxyLimitError(json?.message ?? "You've reached your usage limit.");
+  if (res.status === 429) {
+    const message = json?.message ?? "You've reached your usage limit.";
+    const info: QuotaInfo = { message, resetHours: (json as { resetHours?: number | null } | null)?.resetHours ?? null };
+    quotaListeners.forEach((l) => { try { l(info); } catch { /* ignore */ } });
+    throw new ProxyLimitError(message);
+  }
   if (!res.ok) throw new Error(json?.message ?? json?.error ?? `AI request failed (${res.status}).`);
   return json?.text ?? '';
 }

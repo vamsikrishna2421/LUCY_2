@@ -29,12 +29,46 @@ export function IntelligenceModelsBlock({
     void import('../../ai/proxy').then((m) => m.proxyAvailable()).then((v) => { if (alive) setManaged(v); }).catch(() => {});
     return () => { alive = false; };
   }, []);
+  // Processing mode: 'hybrid' (cloud + on-device fallback) or 'on_device' (fully local). Stored in settings.
+  const [aiMode, setAiMode] = React.useState<'hybrid' | 'on_device'>('hybrid');
+  React.useEffect(() => {
+    let alive = true;
+    void (async () => {
+      try {
+        const { getDatabase } = await import('../../db');
+        const { getSetting } = await import('../../db/settings');
+        const v = await getSetting(await getDatabase(), 'ai_processing_mode');
+        if (alive) setAiMode(v === 'on_device' ? 'on_device' : 'hybrid');
+      } catch { /* default hybrid */ }
+    })();
+    return () => { alive = false; };
+  }, []);
+  const changeAiMode = React.useCallback(async (m: 'hybrid' | 'on_device') => {
+    setAiMode(m);
+    try {
+      const { getDatabase } = await import('../../db');
+      const { setSetting } = await import('../../db/settings');
+      await setSetting(await getDatabase(), 'ai_processing_mode', m);
+    } catch { /* non-critical */ }
+  }, []);
   const activePreset = MODEL_PRESETS.find((p) =>
     (Object.keys(p.models) as ModelRole[]).every((r) => s.roleModels[r] === p.models[r]),
   )?.id ?? null;
 
   return (
     <View style={{ paddingHorizontal: spacing.base, paddingTop: spacing.sm }}>
+      {/* Processing mode: fully on-device vs hybrid (cloud + on-device fallback) */}
+      <Text variant="caption" color="accent" weight="700" tracking={1.2}>PROCESSING</Text>
+      <Text variant="footnote" color="textMuted" style={{ marginTop: 2 }}>
+        On-device keeps everything local & free (slower); Hybrid uses LUCY’s cloud AI for speed & quality.
+      </Text>
+      <Spacer size="sm" />
+      <Row gap="sm">
+        <Chip label="On-device" icon="hardware-chip-outline" selected={aiMode === 'on_device'} onPress={() => void changeAiMode('on_device')} />
+        <Chip label="Hybrid" icon="cloud-outline" selected={aiMode === 'hybrid'} onPress={() => void changeAiMode('hybrid')} />
+      </Row>
+      <Spacer size="lg" />
+
       <Text variant="caption" color="accent" weight="700" tracking={1.2}>INTELLIGENCE & MODELS</Text>
       <Text variant="footnote" color="textMuted" style={{ marginTop: 2 }}>Pick which model powers each agent.</Text>
       <Spacer size="sm" />
