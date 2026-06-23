@@ -34,6 +34,7 @@ import type { ModelRole } from '../ai/modelPreference';
 import type { UserProfile } from '../db/userProfile';
 import { useSettings } from './hooks/useSettings';
 import { SettingsGroup, SettingsRow } from './settings/SettingsPrimitives';
+import { useAuth } from '../auth/AuthProvider';
 import { IntelligenceModelsBlock } from './settings/IntelligenceModelsBlock';
 import {
   IntelligencePanel, BackgroundPanel, OrganizationPanel, PrivacyPanel, ProfilePanel, ConnectorsPanel,
@@ -76,6 +77,7 @@ export function SettingsScreen({
   const { colors, spacing } = useTheme();
   const insets = useSafeAreaInsets();
   const toast = useToast();
+  const { signOut, user } = useAuth();
 
   // Screen-owned UI state (modals/panels/drafts). All logic state lives in the seam hook.
   const [activePanel, setActivePanel] = useState<SettingsPanel>(null);
@@ -421,6 +423,20 @@ export function SettingsScreen({
         {/* ── About & updates ── */}
         <SettingsGroup icon="information-circle-outline" title="Check for updates" summary="Keep LUCY up to date">
           <SettingsRow title="Check for updates" value="Fetch the latest LUCY improvements and restart into them" onAction={() => void checkForUpdates()} actionLabel="Check" />
+        </SettingsGroup>
+
+        {/* ── Account ── */}
+        <SettingsGroup icon="person-circle-outline" title="Account" summary={user?.email ?? 'Signed in'}>
+          <SettingsRow
+            title="Sign out"
+            value={user?.email ? `Signed in as ${user.email}` : 'Sign out of your LUCY account'}
+            actionLabel="Sign out"
+            actionDestructive
+            onAction={() => Alert.alert('Sign out?', 'You’ll need to sign in again to use LUCY.', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Sign out', style: 'destructive', onPress: () => { void signOut(); } },
+            ])}
+          />
         </SettingsGroup>
 
         {/* ── Developer ── */}

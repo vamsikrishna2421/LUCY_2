@@ -12,3 +12,7 @@ export async function getSetting(db: SQLiteDatabase, key: string): Promise<strin
   const row = await db.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key = ?', key);
   return row?.value;
 }
+
+export async function deleteSetting(db: SQLiteDatabase, key: string): Promise<void> {
+  await db.runAsync('DELETE FROM settings WHERE key = ?', key);
+}

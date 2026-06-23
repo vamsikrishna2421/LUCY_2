@@ -38,6 +38,8 @@ import { DashboardScreen } from './src/screens/Dashboard';
 import { SettingsScreen } from './src/screens/Settings';
 import { LucyWrapped } from './src/components/LucyWrapped';
 import { ConnectorsScreen } from './src/screens/Connectors';
+import { AuthProvider, AuthGate } from './src/auth/AuthProvider';
+import { SignInScreen } from './src/screens/SignIn';
 import { NotificationDetailModal, type NotificationDetailPayload } from './src/screens/NotificationDetail';
 import ConversationModal from './src/components/ConversationModal';
 import { AlarmOverlay } from './src/components/AlarmOverlay';
@@ -50,7 +52,7 @@ import { conversation, type ConvoState } from './src/voice/conversation';
 // Capture non-React JS errors (async/timers/native callbacks) to dev_log from first load.
 installGlobalErrorLogger();
 
-export default function App() {
+function AuthedApp() {
   const [screen, setScreen] = useState<'capture' | 'dashboard' | 'settings'>('dashboard');
   // Drives the Dashboard's internal view from the bottom nav (Home → Timeline, Brain → Brain, Ask Lucy).
   const [dashRequestedView, setDashRequestedView] = useState<'Timeline' | 'Brain' | 'Ask Lucy' | 'Focus Now' | 'Health'>('Timeline');
@@ -407,7 +409,7 @@ export default function App() {
     // Deep link: "Hey Siri → LUCY" (a Shortcut opens lucy://voice?text=... or lucy://capture?text=...).
     // Routes dictated text through the command brain so you can drive LUCY hands-free via Siri.
     const handleDeepLink = async (url: string | null) => {
-      if (!url || url.indexOf('lucy://') !== 0) return;
+      if (!url || url.indexOf('lucy://') !== 0 || url.includes('auth-callback')) return;
       const mm = url.match(/^lucy:\/\/([^?]*)\??(.*)$/);
       const kind = (mm && mm[1] ? mm[1] : 'voice').replace(/\/+$/, '');
       const qs = (mm && mm[2]) || '';
@@ -837,13 +839,7 @@ export default function App() {
   }, []);
 
   return (
-   <ErrorBoundary>
-    <GestureHandlerRootView style={{ flex: 1 }}>
-    <SafeAreaProvider>
-     <ThemeProvider>
-      <ToastProvider>
-       <EntitlementProvider>
-        <PaywallController>
+    <>
       <SafeAreaView style={styles.safe}>
         <StatusBar style="light" />
         {/* Unified header shown on all screens — consistent controls everywhere */}
@@ -1200,8 +1196,26 @@ export default function App() {
         // Otherwise it's always available later from Settings → "Guided tour with Lucy".
         if (startTour) startGuidedTour(false);
       }} />
+    </>
+  );
+}
+
+export default function App() {
+  return (
+   <ErrorBoundary>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+    <SafeAreaProvider>
+     <ThemeProvider>
+      <ToastProvider>
+       <AuthProvider>
+        <AuthGate fallback={<SignInScreen />}>
+       <EntitlementProvider>
+        <PaywallController>
+          <AuthedApp />
         </PaywallController>
        </EntitlementProvider>
+        </AuthGate>
+       </AuthProvider>
       </ToastProvider>
      </ThemeProvider>
     </SafeAreaProvider>
