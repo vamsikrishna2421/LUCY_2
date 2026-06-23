@@ -46,6 +46,7 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Gate everything except Next internals and static assets.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // Gate the dashboard UI, but NOT /api/* — the API routes are called by the mobile app with a
+  // Supabase JWT (Bearer) and do their own auth; the cookie gate must not redirect them to /login.
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
 };
